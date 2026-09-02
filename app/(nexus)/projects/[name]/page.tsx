@@ -1,8 +1,6 @@
 import Link from "next/link";
 import {
   BrainCircuit,
-} from "lucide-react";
-import {
   ArrowLeft,
   CheckCircle2,
   XCircle,
@@ -12,12 +10,17 @@ import {
   FileText,
   Activity,
   GitBranch,
+  BriefcaseBusiness,
+  MessageSquare,
+  Rocket,
+  Wrench,
+  Target,
 } from "lucide-react";
+
 import { calculateProjectScore } from "@/lib/project-score";
 import { getCachedRepositoryAnalysis } from "@/lib/github-cache";
-import {
-  calculateCareerImpact,
-} from "@/lib/career-impact";
+import { calculateCareerImpact } from "@/lib/career-impact";
+
 type PageProps = {
   params: Promise<{
     name: string;
@@ -126,13 +129,13 @@ export default async function ProjectPage({
     );
 
   const healthScore =
-  calculateProjectScore(signals);
+    calculateProjectScore(signals);
 
   const careerImpact =
-  calculateCareerImpact(
-    signals,
-    healthScore
-  );
+    calculateCareerImpact(
+      signals,
+      healthScore
+    );
 
   const recommendations: string[] = [];
 
@@ -186,7 +189,6 @@ export default async function ProjectPage({
 
   return (
     <main className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-6 lg:px-8">
-
       {/* Back */}
       <Link
         href="/projects"
@@ -199,35 +201,44 @@ export default async function ProjectPage({
       {/* Header */}
       <section className="mb-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {repository.name}
+            </h1>
 
-    <div className="flex flex-wrap gap-2">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+              {repository.description ||
+                "No repository description available."}
+            </p>
+          </div>
 
-  <a
-    href={repository.html_url}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
-  >
-    View on GitHub
-  </a>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={repository.html_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              <ExternalLink className="h-4 w-4" />
+              View on GitHub
+            </a>
 
-  <Link
-    href={`/projects/${encodeURIComponent(repoName)}/interview`}
-    className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:opacity-90"
-  >
-    <BrainCircuit className="h-4 w-4" />
-    Prepare for Interview
-  </Link>
-
-</div>
-
+            <Link
+              href={`/projects/${encodeURIComponent(
+                repoName
+              )}/interview`}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:opacity-90"
+            >
+              <BrainCircuit className="h-4 w-4" />
+              Prepare for Interview
+            </Link>
+          </div>
         </div>
       </section>
 
       {/* Health Score */}
       <section className="mb-8 rounded-2xl border bg-card p-6">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-
           <div>
             <p className="text-sm text-muted-foreground">
               Engineering Health
@@ -259,13 +270,11 @@ export default async function ProjectPage({
               />
             </div>
           </div>
-
         </div>
       </section>
 
       {/* Repository Stats */}
       <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-
         <StatCard
           icon={<Code2 className="h-5 w-5" />}
           label="Primary Language"
@@ -289,12 +298,129 @@ export default async function ProjectPage({
           label="Open Issues"
           value={String(repository.open_issues_count)}
         />
+      </section>
 
+      {/* Career Impact */}
+      <section className="mb-8 rounded-2xl border bg-card p-6 shadow-sm">
+        <div className="mb-6 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <BriefcaseBusiness className="h-5 w-5 text-primary" />
+          </div>
+
+          <div>
+            <h2 className="font-semibold">
+              Career Impact
+            </h2>
+
+            <p className="text-sm text-muted-foreground">
+              How this project contributes to your hiring profile.
+            </p>
+          </div>
+        </div>
+
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <CareerMetric
+            icon={FileText}
+            label="Resume Strength"
+            value={careerImpact.resumeStrength}
+          />
+
+          <CareerMetric
+            icon={MessageSquare}
+            label="Interview Value"
+            value={careerImpact.interviewValue}
+          />
+
+          <CareerMetric
+            icon={Rocket}
+            label="Production Readiness"
+            value={careerImpact.productionReadiness}
+          />
+
+          <CareerMetric
+            icon={Wrench}
+            label="Engineering Maturity"
+            value={careerImpact.engineeringMaturity}
+          />
+        </div>
+
+        <div className="rounded-xl border bg-muted/30 p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Overall Career Impact
+              </p>
+
+              <p className="mt-1 text-3xl font-bold">
+                {careerImpact.overall}
+                <span className="ml-1 text-sm font-normal text-muted-foreground">
+                  /100
+                </span>
+              </p>
+            </div>
+
+            <Target className="h-6 w-6 text-primary" />
+          </div>
+
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{
+                width: `${careerImpact.overall}%`,
+              }}
+            />
+          </div>
+        </div>
+
+        {careerImpact.roles.length > 0 && (
+          <div className="mt-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Relevant Roles
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              {careerImpact.roles.map((role) => (
+                <span
+                  key={role}
+                  className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary"
+                >
+                  {role}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {careerImpact.improvements.length > 0 && (
+          <div className="mt-6">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Highest-Impact Improvements
+            </p>
+
+            <div className="space-y-2">
+              {careerImpact.improvements.map(
+                (improvement, index) => (
+                  <div
+                    key={improvement}
+                    className="flex gap-3 rounded-xl bg-muted/50 p-3"
+                  >
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                      {index + 1}
+                    </span>
+
+                    <p className="text-sm leading-6">
+                      {improvement}
+                    </p>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Engineering Signals */}
       <section className="mb-8">
-
         <div className="mb-4">
           <h2 className="text-xl font-semibold">
             Engineering Signals
@@ -306,7 +432,6 @@ export default async function ProjectPage({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-
           <Signal
             label="README Documentation"
             enabled={signals.hasReadme}
@@ -346,15 +471,12 @@ export default async function ProjectPage({
             label="License"
             enabled={signals.hasLicense}
           />
-
         </div>
       </section>
 
       {/* Recommendations */}
       <section className="mb-8 rounded-2xl border bg-card p-6">
-
         <div className="mb-5 flex items-center gap-3">
-
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
             <ShieldCheck className="h-5 w-5" />
           </div>
@@ -368,11 +490,9 @@ export default async function ProjectPage({
               Improvements that can increase engineering maturity.
             </p>
           </div>
-
         </div>
 
         <div className="space-y-3">
-
           {recommendations.map(
             (recommendation, index) => (
               <div
@@ -389,125 +509,8 @@ export default async function ProjectPage({
               </div>
             )
           )}
-
         </div>
       </section>
-      <section className="mt-8 rounded-2xl border bg-card p-6">
-
-  <div className="flex items-center gap-3">
-    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-      <FileText className="h-5 w-5" />
-    </div>
-
-    <div>
-      <h2 className="font-semibold">
-        NEXUS Career Impact
-      </h2>
-
-      <p className="text-sm text-muted-foreground">
-        How this project contributes to your engineering profile.
-      </p>
-    </div>
-  </div>
-
-  {/* Overall */}
-  <div className="mt-6 rounded-xl border bg-background/40 p-5">
-    <p className="text-sm text-muted-foreground">
-      Overall Career Impact
-    </p>
-
-    <div className="mt-2 flex items-end gap-2">
-      <span className="text-4xl font-bold">
-        {careerImpact.overall}
-      </span>
-
-      <span className="mb-1 text-sm text-muted-foreground">
-        /100
-      </span>
-    </div>
-  </div>
-
-  {/* Career Metrics */}
-  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-
-    <CareerMetric
-      label="Resume Strength"
-      value={careerImpact.resumeStrength}
-    />
-
-    <CareerMetric
-      label="Interview Value"
-      value={careerImpact.interviewValue}
-    />
-
-    <CareerMetric
-      label="Production Readiness"
-      value={careerImpact.productionReadiness}
-    />
-
-    <CareerMetric
-      label="Engineering Maturity"
-      value={careerImpact.engineeringMaturity}
-    />
-
-  </div>
-
-  {/* Roles */}
-  <div className="mt-6">
-
-    <h3 className="text-sm font-semibold">
-      Recommended Roles
-    </h3>
-
-    <div className="mt-3 flex flex-wrap gap-2">
-
-      {careerImpact.roles.map((role) => (
-        <span
-          key={role}
-          className="rounded-full border px-3 py-1.5 text-xs font-medium"
-        >
-          {role}
-        </span>
-      ))}
-
-    </div>
-
-  </div>
-
-  {/* Improvements */}
-  {careerImpact.improvements.length > 0 && (
-    <div className="mt-6">
-
-      <h3 className="text-sm font-semibold">
-        Improve Before Interviewing
-      </h3>
-
-      <div className="mt-3 space-y-2">
-
-        {careerImpact.improvements.map(
-          (improvement, index) => (
-            <div
-              key={improvement}
-              className="flex gap-3 rounded-xl bg-muted/50 p-3"
-            >
-              <span className="font-semibold text-primary">
-                {index + 1}.
-              </span>
-
-              <p className="text-sm text-muted-foreground">
-                {improvement}
-              </p>
-            </div>
-          )
-        )}
-
-      </div>
-
-    </div>
-  )}
-
-</section>
-
     </main>
   );
 }
@@ -523,7 +526,6 @@ function StatCard({
 }) {
   return (
     <div className="rounded-2xl border bg-card p-5">
-
       <div className="mb-3 flex items-center gap-2 text-muted-foreground">
         {icon}
 
@@ -535,31 +537,34 @@ function StatCard({
       <p className="text-xl font-semibold">
         {value}
       </p>
-
     </div>
   );
 }
+
 function CareerMetric({
+  icon: Icon,
   label,
   value,
 }: {
+  icon: typeof BriefcaseBusiness;
   label: string;
   value: number;
 }) {
   return (
-    <div className="rounded-xl border p-4">
-
+    <div className="rounded-xl border bg-background p-4">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
-          {label}
-        </span>
+        <Icon className="h-4 w-4 text-primary" />
 
-        <span className="text-sm font-semibold">
+        <span className="text-lg font-bold">
           {value}
         </span>
       </div>
 
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+      <p className="mt-2 text-xs text-muted-foreground">
+        {label}
+      </p>
+
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
         <div
           className="h-full rounded-full bg-primary"
           style={{
@@ -567,7 +572,6 @@ function CareerMetric({
           }}
         />
       </div>
-
     </div>
   );
 }

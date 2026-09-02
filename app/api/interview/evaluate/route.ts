@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+
 import {
   evaluateInterviewAnswer,
 } from "@/lib/ai-interviewer";
@@ -7,17 +8,25 @@ import {
   getCachedRepositoryAnalysis,
 } from "@/lib/github-cache";
 
-export async function POST(request: Request) {
-  console.log(
-    "🔥 GEMINI KEY LOADED:",
-    Boolean(process.env.GEMINI_API_KEY)
-  );
+import { prisma } from "@/lib/prisma";
 
+type RequestBody = {
+  projectName: string;
+  sessionId?: string;
+  question: string;
+  answer: string;
+  category: string;
+  difficulty: string;
+};
+
+export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body =
+      (await request.json()) as RequestBody;
 
     const {
       projectName,
+      sessionId,
       question,
       answer,
       category,
@@ -55,10 +64,6 @@ export async function POST(request: Request) {
       process.env.GITHUB_USERNAME ||
       "Tanmaysriv";
 
-    console.log(
-      "🔥 Loading repository signals..."
-    );
-
     const signals =
       await getCachedRepositoryAnalysis(
         owner,
@@ -68,61 +73,107 @@ export async function POST(request: Request) {
     /*
      * Gemini evaluation
      */
-    if (process.env.GEMINI_API_KEY) {
-      console.log(
-        "🔥 ENTERING GEMINI EVALUATOR"
+
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json(
+        {
+          error:
+            "Gemini API key is not configured.",
+        },
+        { status: 500 }
       );
+    }
 
-      try {
-        const evaluation =
-          await evaluateInterviewAnswer({
-            projectName,
-            question,
-            answer,
+    const evaluation =
+      await evaluateInterviewAnswer({
+        projectName,
+        question,
+        answer,
+        category,
+        difficulty,
+        signals,
+      });
+
+    /*
+     * Create a session if this is the
+     * first answer.
+     */
+
+    let activeSessionId = sessionId;
+
+    if (!activeSessionId) {
+      const session =
+        await prisma.interviewSession.create({
+          data: {
+            project: projectName,
             category,
-            difficulty,
-            signals,
-          });
-
-        console.log(
-          "🔥 GEMINI SUCCESS"
-        );
-
-        return NextResponse.json(
-          evaluation
-        );
-      } catch (error) {
-        console.error(
-          "🔥 GEMINI ERROR:",
-          error
-        );
-
-        return NextResponse.json(
-          {
-            error:
-              error instanceof Error
-                ? error.message
-                : "Gemini evaluation failed.",
           },
-          { status: 500 }
-        );
-      }
+        });
+
+      activeSessionId = session.id;
     }
 
     /*
-     * Gemini key missing.
+     * Save the evaluated answer.
      */
-    console.error(
-      "❌ GEMINI_API_KEY is missing."
-    );
 
-    return NextResponse.json(
-      {
-        error:
-          "Gemini API key is not configured.",
-      },
-      { status: 500 }
-    );
+    const savedAnswer =
+      await prisma.interviewAnswer.create({
+        data: {
+          sessionId: activeSessionId,
+
+          question,
+          answer,
+          category,
+          difficulty,
+
+          overall: evaluation.overall,
+
+          technicalCorrectness:
+            evaluation.technicalCorrectness,
+
+          relevance:
+            evaluation.relevance,
+
+          depth:
+            evaluation.depth,
+
+          communication:
+            evaluation.communication,
+
+          projectKnowledge:
+            evaluation.projectKnowledge,
+
+          verdict:
+            evaluation.verdict,
+
+          strengths:
+            evaluation.strengths,
+
+          missingConcepts:
+            evaluation.missingConcepts,
+
+          improvements:
+            evaluation.improvements,
+
+          idealAnswer:
+            evaluation.idealAnswer,
+
+          followUpQuestion:
+            evaluation.followUpQuestion,
+        },
+      });
+
+    /*
+     * Return the same evaluation to the UI,
+     * plus database identifiers.
+     */
+
+    return NextResponse.json({
+      ...evaluation,
+      sessionId: activeSessionId,
+      answerId: savedAnswer.id,
+    });
   } catch (error) {
     console.error(
       "❌ Interview API error:",

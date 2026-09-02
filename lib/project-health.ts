@@ -9,6 +9,8 @@ export type RepositorySignals = {
   hasTypeScript: boolean;
   hasEnvironmentExample: boolean;
   hasLicense: boolean;
+
+  technologies: string[];
 };
 
 export type ProjectHealth = {

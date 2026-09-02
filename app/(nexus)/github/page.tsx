@@ -25,7 +25,7 @@ import {
 } from "@/lib/github-cache";
 
 import ProjectHealthCard from "@/components/dashboard/project-health";
-
+export const dynamic = "force-dynamic";
 export default async function GithubPage() {
   const github = await getGitHubStats();
 

@@ -1,5 +1,9 @@
 "use client";
-
+import SessionSummary from "@/components/interview/session-summary";
+import {
+  calculateSessionAnalytics,
+  type InterviewResult,
+} from "@/lib/interview-session";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -27,12 +31,18 @@ type Question = {
 };
 
 type Evaluation = {
-  score: number;
+  overall: number;
+  technicalCorrectness: number;
+  relevance: number;
+  depth: number;
+  communication: number;
+  projectKnowledge: number;
   verdict: string;
   strengths: string[];
+  missingConcepts: string[];
   improvements: string[];
-  matchedKeywords: string[];
-  improvedAnswer: string;
+  idealAnswer: string;
+  followUpQuestion: string;
 };
 
 type Props = {
@@ -52,10 +62,21 @@ export default function InterviewCoach({
   projectName,
   questions,
 }: Props) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answer, setAnswer] = useState("");
-  const [evaluation, setEvaluation] =
-    useState<Evaluation | null>(null);
+const [currentIndex, setCurrentIndex] = useState(0);
+const [sessionId, setSessionId] = useState<string | null>(null);
+const [answer, setAnswer] =
+  useState("");
+
+const [evaluation, setEvaluation] =
+  useState<Evaluation | null>(null);
+
+const [sessionResults, setSessionResults] =
+  useState<InterviewResult[]>([]);
+
+const sessionAnalytics =
+  calculateSessionAnalytics(
+    sessionResults
+  );
   const [loading, setLoading] = useState(false);
 
   const question = questions[currentIndex];
@@ -69,65 +90,96 @@ export default function InterviewCoach({
   );
 
   async function evaluateAnswer() {
-    if (!answer.trim() || loading) return;
+  if (!answer.trim() || loading) return;
 
-    setLoading(true);
-    setEvaluation(null);
+  setLoading(true);
+  setEvaluation(null);
 
-    try {
-      const response = await fetch(
-        "/api/interview/evaluate",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-  projectName,
-  question: question.question,
-  answer,
-  category: question.category,
-  difficulty: question.difficulty,
-}),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Evaluation failed."
-        );
+  try {
+    const response = await fetch(
+      "/api/interview/evaluate",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          projectName,
+          sessionId,
+          question: question.question,
+          answer,
+          category: question.category,
+          difficulty: question.difficulty,
+        }),
       }
+    );
 
-      setEvaluation(data);
-    } catch (error) {
-      console.error(error);
+    const data = await response.json();
 
-      setEvaluation({
-        score: 0,
-        verdict: "Evaluation failed",
-        strengths: [],
-        improvements: [
-          "Could not evaluate the answer. Please try again.",
-        ],
-        matchedKeywords: [],
-        improvedAnswer: "",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function nextQuestion() {
-    if (currentIndex >= questions.length - 1) {
-      return;
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+          "Could not evaluate the answer."
+      );
     }
 
-    setCurrentIndex((index) => index + 1);
-    setAnswer("");
-    setEvaluation(null);
+    /*
+     * The first answer creates the interview
+     * session. Keep that session ID for all
+     * subsequent answers.
+     */
+    if (data.sessionId) {
+      setSessionId(data.sessionId);
+    }
+
+    setEvaluation(data);
+
+    setSessionResults((previous) => [
+      ...previous,
+      {
+        question: question.question,
+        answer,
+        category: question.category,
+        difficulty: question.difficulty,
+        evaluation: data,
+      },
+    ]);
+  } catch (error) {
+    console.error(error);
+
+    setEvaluation({
+      overall: 0,
+      technicalCorrectness: 0,
+      relevance: 0,
+      depth: 0,
+      communication: 0,
+      projectKnowledge: 0,
+      verdict: "Evaluation failed",
+      strengths: [],
+      missingConcepts: [],
+      improvements: [
+        "Could not evaluate the answer. Please try again.",
+      ],
+      idealAnswer: "",
+      followUpQuestion: "",
+    });
+  } finally {
+    setLoading(false);
   }
+}
+
+function nextQuestion() {
+  if (currentIndex >= questions.length - 1) {
+    return;
+  }
+
+  setCurrentIndex(
+    (index) => index + 1
+  );
+
+  setAnswer("");
+  setEvaluation(null);
+}
 
   function resetQuestion() {
     setAnswer("");
@@ -293,51 +345,77 @@ export default function InterviewCoach({
 
       </section>
 
+      {/* Interview Session Analytics */}
+      {sessionResults.length > 0 && (
+        <div className="mt-6">
+          <SessionSummary
+            analytics={sessionAnalytics}
+          />
+        </div>
+      )}
       {/* Evaluation */}
       {evaluation && (
         <section className="mt-6 space-y-5">
 
           {/* Score */}
-          <div className="rounded-2xl border bg-card p-6">
+<div className="rounded-2xl border bg-card p-6">
 
-            <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+  <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
 
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  NEXUS Score
-                </p>
+    <div className="shrink-0 text-center lg:w-40">
 
-                <div className="mt-1 flex items-end gap-2">
-                  <span className="text-5xl font-bold">
-                    {evaluation.score}
-                  </span>
+      <p className="text-sm text-muted-foreground">
+        NEXUS Score
+      </p>
 
-                  <span className="mb-2 text-sm text-muted-foreground">
-                    /100
-                  </span>
-                </div>
-              </div>
+      <div className="mt-1">
+        <span className="text-5xl font-bold">
+          {evaluation.overall}
+        </span>
 
-              <div className="flex-1">
+        <span className="text-sm text-muted-foreground">
+          /100
+        </span>
+      </div>
 
-                <p className="font-semibold">
-                  {evaluation.verdict}
-                </p>
+      <p className="mt-2 text-sm font-semibold">
+        {evaluation.verdict}
+      </p>
 
-                <div className="mt-3 h-3 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all"
-                    style={{
-                      width: `${evaluation.score}%`,
-                    }}
-                  />
-                </div>
+    </div>
 
-              </div>
+    <div className="flex-1 space-y-4">
 
-            </div>
+      <ScoreBar
+        label="Technical Correctness"
+        value={evaluation.technicalCorrectness}
+      />
 
-          </div>
+      <ScoreBar
+        label="Relevance"
+        value={evaluation.relevance}
+      />
+
+      <ScoreBar
+        label="Depth"
+        value={evaluation.depth}
+      />
+
+      <ScoreBar
+        label="Communication"
+        value={evaluation.communication}
+      />
+
+      <ScoreBar
+        label="Project Knowledge"
+        value={evaluation.projectKnowledge}
+      />
+
+    </div>
+
+  </div>
+
+</div>
 
           {/* Strengths */}
           {evaluation.strengths.length > 0 && (
@@ -394,9 +472,35 @@ export default function InterviewCoach({
             </div>
 
           </div>
+          {/* Missing Concepts */}
+          {evaluation.missingConcepts.length > 0 && (
+            <div className="rounded-2xl border bg-card p-6">
 
-          {/* Suggested Approach */}
-          {evaluation.improvedAnswer && (
+              <div className="flex items-center gap-2">
+                <BrainCircuit className="h-5 w-5 text-primary" />
+
+                <h3 className="font-semibold">
+                  Missing Concepts
+                </h3>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {evaluation.missingConcepts.map(
+                  (item) => (
+                    <div
+                      key={item}
+                      className="rounded-xl bg-yellow-500/5 p-3 text-sm text-muted-foreground"
+                    >
+                      ⚠ {item}
+                    </div>
+                  )
+                )}
+              </div>
+
+            </div>
+          )}
+          {/* Ideal Answer */}
+          {evaluation.idealAnswer && (
             <div className="rounded-2xl border bg-card p-6">
 
               <div className="flex items-center gap-2">
@@ -408,12 +512,29 @@ export default function InterviewCoach({
               </div>
 
               <p className="mt-4 rounded-xl bg-primary/5 p-4 text-sm leading-7 text-muted-foreground">
-                {evaluation.improvedAnswer}
+                {evaluation.idealAnswer}
               </p>
 
             </div>
           )}
+                    {/* Follow-up Question */}
+          {evaluation.followUpQuestion && (
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6">
 
+              <div className="flex items-center gap-2">
+                <ChevronRight className="h-5 w-5 text-primary" />
+
+                <h3 className="font-semibold">
+                  NEXUS Follow-up Question
+                </h3>
+              </div>
+
+              <p className="mt-4 text-sm leading-7 text-muted-foreground">
+                {evaluation.followUpQuestion}
+              </p>
+
+            </div>
+          )}
           {/* Next */}
           {currentIndex < questions.length - 1 ? (
             <button
@@ -433,7 +554,7 @@ export default function InterviewCoach({
               </h3>
 
               <p className="mt-2 text-sm text-muted-foreground">
-                You've completed all NEXUS questions for this project.
+                You&apos;ve completed all NEXUS questions for this project.
               </p>
             </div>
           )}
@@ -442,5 +563,39 @@ export default function InterviewCoach({
       )}
 
     </main>
+  );
+}
+function ScoreBar({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div>
+
+      <div className="mb-1 flex justify-between text-xs">
+        <span className="text-muted-foreground">
+          {label}
+        </span>
+
+        <span className="font-semibold">
+          {value}
+        </span>
+      </div>
+
+      <div className="h-2 overflow-hidden rounded-full bg-muted">
+
+        <div
+          className="h-full rounded-full bg-primary transition-all duration-700"
+          style={{
+            width: `${value}%`,
+          }}
+        />
+
+      </div>
+
+    </div>
   );
 }
