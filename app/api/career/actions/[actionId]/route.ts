@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = {
@@ -13,38 +13,40 @@ export async function GET(
   context: RouteContext
 ) {
   try {
-    const { actionId } =
-      await context.params;
+    const user = await getCurrentUser();
 
-    const action =
-      await prisma.careerAction.findUnique({
-        where: {
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required." },
+        { status: 401 }
+      );
+    }
+
+    const { actionId } = await context.params;
+
+    const action = await prisma.careerAction.findUnique({
+      where: {
+        userId_actionId: {
+          userId: user.id,
           actionId,
         },
-      });
+      },
+    });
 
     if (!action) {
       return NextResponse.json(
-        {
-          status: "Pending",
-          progress: 0,
-        }
+        { error: "Career action not found." },
+        { status: 404 }
       );
     }
 
     return NextResponse.json(action);
   } catch (error) {
-    console.error(
-      "Career action GET error:",
-      error
-    );
+    logger.error("Career action GET error", { error });
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to load action.",
+        error: "Unable to load action.",
       },
       {
         status: 500,
@@ -58,8 +60,16 @@ export async function PATCH(
   context: RouteContext
 ) {
   try {
-    const { actionId } =
-      await context.params;
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required." },
+        { status: 401 }
+      );
+    }
+
+    const { actionId } = await context.params;
 
     const body = await request.json();
 
@@ -86,8 +96,7 @@ export async function PATCH(
     ) {
       return NextResponse.json(
         {
-          error:
-            "Invalid action status.",
+          error: "Invalid action status.",
         },
         {
           status: 400,
@@ -98,15 +107,17 @@ export async function PATCH(
     const existing =
       await prisma.careerAction.findUnique({
         where: {
-          actionId,
+          userId_actionId: {
+            userId: user.id,
+            actionId,
+          },
         },
       });
 
     if (!existing) {
       return NextResponse.json(
         {
-          error:
-            "Action has not been registered yet.",
+          error: "Action has not been registered yet.",
         },
         {
           status: 404,
@@ -116,11 +127,9 @@ export async function PATCH(
 
     const nextStatus =
       status ??
-      (progress !== undefined &&
-      progress >= 100
+      (progress !== undefined && progress >= 100
         ? "Completed"
-        : progress !== undefined &&
-          progress > 0
+        : progress !== undefined && progress > 0
         ? "In Progress"
         : existing.status);
 
@@ -132,7 +141,10 @@ export async function PATCH(
     const updated =
       await prisma.careerAction.update({
         where: {
-          actionId,
+          userId_actionId: {
+            userId: user.id,
+            actionId,
+          },
         },
         data: {
           status: nextStatus,
@@ -140,31 +152,23 @@ export async function PATCH(
 
           startedAt:
             nextStatus !== "Pending"
-              ? existing.startedAt ??
-                new Date()
+              ? existing.startedAt ?? new Date()
               : existing.startedAt,
 
           completedAt:
             nextStatus === "Completed"
-              ? existing.completedAt ??
-                new Date()
+              ? existing.completedAt ?? new Date()
               : null,
         },
       });
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error(
-      "Career action PATCH error:",
-      error
-    );
+    logger.error("Career action PATCH error", { error });
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to update action.",
+        error: "Unable to update action.",
       },
       {
         status: 500,
@@ -172,3 +176,5 @@ export async function PATCH(
     );
   }
 }
+
+

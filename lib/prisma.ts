@@ -1,20 +1,33 @@
+import dns from "node:dns";
+import net from "node:net";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/lib/generated/prisma/client";
+import { Pool } from "pg";
+import { PrismaClient } from "./generated/prisma/client";
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
+dns.setDefaultResultOrder("ipv4first");
+net.setDefaultAutoSelectFamily(false);
 
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL!,
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error("DATABASE_URL is not configured.");
+}
+
+const databaseUrl = new URL(connectionString);
+databaseUrl.searchParams.delete("sslmode");
+
+const pool = new Pool({
+  connectionString: databaseUrl.toString(),
+  max: 10,
+  connectionTimeoutMillis: 15000,
+  idleTimeoutMillis: 30000,
+  ssl: {
+    rejectUnauthorized: true,
+  },
 });
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    adapter,
-  });
+const adapter = new PrismaPg(pool);
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+export const prisma = new PrismaClient({
+  adapter,
+});

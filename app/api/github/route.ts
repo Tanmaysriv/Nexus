@@ -1,30 +1,58 @@
-import { getGitHubActivity, getGitHubStats } from "@/lib/github";
 import { NextResponse } from "next/server";
 
+import { getCurrentUser, requireApiAuth } from "@/lib/auth";
+import {
+  getGitHubActivity,
+  getGitHubStats,
+  hasGitHubAccount,
+} from "@/lib/github";
+
 export async function GET() {
+  const authError = await requireApiAuth();
+
+  if (authError) {
+    return authError;
+  }
+
   try {
-    const stats = await getGitHubStats();
+    const user = await getCurrentUser();
 
-    const username = stats.profile.login;
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required." },
+        { status: 401 },
+      );
+    }
 
-    const activity = await getGitHubActivity(username);
+    const connected = await hasGitHubAccount(user.id);
+
+    if (!connected) {
+      return NextResponse.json({
+        connected: false,
+        stats: null,
+        activity: [],
+      });
+    }
+
+    const stats = await getGitHubStats(user.id);
+    const activity = await getGitHubActivity(user.id);
 
     return NextResponse.json({
+      connected: true,
       stats,
       activity,
     });
   } catch (error) {
-    console.error("GitHub API error:", error);
+    logger.error("GitHub API error", { error });
 
     return NextResponse.json(
       {
         error: "Unable to fetch GitHub data",
-        details:
-          error instanceof Error
-            ? error.message
-            : String(error),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
+
+
+

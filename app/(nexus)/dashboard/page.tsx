@@ -163,6 +163,11 @@ export default function DashboardPage() {
           }
         }),
       );
+      const hasPartialFailure = responses.some(
+        (response) => response === null,
+      );
+
+      setError(hasPartialFailure);
 
       setData({
         readiness: responses[0],
@@ -231,15 +236,24 @@ const roadmapProgress = useMemo(() => {
   );
 
   const completedActions = data.actions.filter(
-    (action) =>
-      action.status === "Completed" ||
-      action.progress >= 100,
-  ).length;
+  (action) =>
+    action.status === "Completed" ||
+    action.progress >= 100,
+).length;
 
-  const activeActions = data.actions.filter(
-    (action) =>
-      action.status === "In Progress",
-  ).length;
+const activeActions = data.actions.filter(
+  (action) => action.status === "In Progress",
+).length;
+
+const roadmapCompleted = getNumber(
+  getObject(data.progress, "progress"),
+  ["completed"],
+);
+
+const roadmapTotal = getNumber(
+  getObject(data.progress, "progress"),
+  ["total"],
+);
 
   const nextActions = [...data.actions]
     .sort((a, b) => {
@@ -345,7 +359,7 @@ const roadmapProgress = useMemo(() => {
             icon={<Rocket className="h-5 w-5" />}
             label="Roadmap Progress"
             score={roadmapProgress}
-            description={`${completedActions} actions completed`}
+            description={`${roadmapCompleted}/${roadmapTotal} roadmap items`}
           />
 
           <ScoreCard
@@ -550,9 +564,9 @@ const roadmapProgress = useMemo(() => {
 
             <div className="mt-5 grid grid-cols-2 gap-3">
               <StatCard
-                label="Completed Actions"
-                value={completedActions}
-              />
+  label="Completed Items"
+  value={roadmapCompleted}
+/>
 
               <StatCard
                 label="Active Actions"

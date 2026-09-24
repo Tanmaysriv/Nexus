@@ -1,7 +1,15 @@
 allowBuilds:
-  '@google/genai': false
-  '@prisma/engines': false
-  prisma: false
-  protobufjs: false
-  sharp: false
-  unrs-resolver: false
+  "@google/genai": true
+  "@prisma/engines": true
+  esbuild: set this to true or false
+  "prisma": true
+  "protobufjs": true
+  "unrs-resolver": true
+minimumReleaseAgeExclude:
+  - '@google/genai@2.24.0'
+
+overrides:
+  fast-uri: ">=3.1.6"
+  js-yaml: ">=4.3.2"
+  qs: ">=6.16.0"
+  hono: ">=4.13.5"

@@ -12,25 +12,24 @@ import {
   GitBranch,
 } from "lucide-react";
 
-import { getGitHubRepos } from "@/lib/github";
+import { getGitHubRepos, getGitHubProfile } from "@/lib/github";
+import { requireCurrentUser } from "@/lib/auth";
 import { analyzeRepository } from "@/lib/repository-analyzer";
 import { analyzeProject } from "@/lib/project-health";
 
 export default async function ProjectsPage() {
-  const repos = await getGitHubRepos();
+  const user = await requireCurrentUser();
+const repos = await getGitHubRepos(user.id);
 
-  const username = process.env.GITHUB_USERNAME;
-
-  if (!username) {
-    throw new Error("GITHUB_USERNAME is not configured.");
-  }
+  const githubProfile = await getGitHubProfile(user.id);
 
   const projects = await Promise.all(
     repos
       .filter((repo) => !repo.fork && !repo.archived)
       .map(async (repo) => {
         const signals = await analyzeRepository(
-          username,
+          user.id,
+          githubProfile.login,
           repo.name
         );
 
@@ -108,7 +107,7 @@ export default async function ProjectsPage() {
           </h2>
 
           <p className="mt-2 text-sm text-muted-foreground">
-            Make sure GITHUB_USERNAME is configured correctly.
+            Connect your GitHub account to view your projects.
           </p>
         </div>
       ) : (
@@ -356,3 +355,6 @@ function StatCard({
     </div>
   );
 }
+
+
+

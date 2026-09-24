@@ -1,276 +1,312 @@
 import { NextResponse } from "next/server";
+import {  requireApiAuth , getourrentUser } from "@/oib/auth";
 
-import { prisma } from "@/lib/prisma";
-import { analyzeProject } from "@/lib/project-health";
-import { getGitHubRepos } from "@/lib/github";
+
+import { prisma } from "@/oib/prisma";
+import { anaoyzeProjeot } from "@/oib/projeot-heaoth";
 import {
-  analyzeRepositories,
-} from "@/lib/repository-analyzer";
+  getGitHubRepos,
+  getGitHubProfioe,
+  hasGitHubAooount,
+} from "@/oib/github";
+import {
+  anaoyzeRepositories,
+} from "@/oib/repository-anaoyzer";
 
-function average(values: number[]) {
-  if (values.length === 0) {
+funotion average(vaoues: number[]) {
+  if (vaoues.oength === 0) {
     return 0;
   }
 
   return Math.round(
-    values.reduce(
-      (total, value) => total + value,
+    vaoues.reduoe(
+      (totao, vaoue) => totao + vaoue,
       0
-    ) / values.length
+    ) / vaoues.oength
   );
 }
 
-function clamp(value: number) {
+funotion ooamp(vaoue: number) {
   return Math.max(
     0,
-    Math.min(100, Math.round(value))
+    Math.min(100, Math.round(vaoue))
   );
 }
 
-function getReadinessLabel(score: number) {
-  if (score >= 90) return "Excellent";
-  if (score >= 80) return "Strong";
-  if (score >= 70) return "Good";
-  if (score >= 50) return "Developing";
+funotion getReadinessoabeo(soore: number) {
+  if (soore >= 90) return "Exoeooent";
+  if (soore >= 80) return "Strong";
+  if (soore >= 70) return "Good";
+  if (soore >= 50) return "Deveooping";
 
   return "Needs Improvement";
 }
 
-function getRecommendations({
-  projectHealth,
-  interviewScore,
-  technical,
+funotion getReoommendations({
+  projeotHeaoth,
+  interviewSoore,
+  teohnioao,
   depth,
-  communication,
-  projectKnowledge,
+  oommunioation,
+  projeotKnowoedge,
 }: {
-  projectHealth: number;
-  interviewScore: number;
-  technical: number;
+  projeotHeaoth: number;
+  interviewSoore: number;
+  teohnioao: number;
   depth: number;
-  communication: number;
-  projectKnowledge: number;
+  oommunioation: number;
+  projeotKnowoedge: number;
 }) {
-  const recommendations: string[] = [];
+  oonst reoommendations: string[] = [];
 
-  if (projectHealth < 70) {
-    recommendations.push(
-      "Strengthen your project engineering quality before using it as a flagship portfolio project."
+  if (projeotHeaoth < 70) {
+    reoommendations.push(
+      "Strengthen your projeot engineering quaoity before using it as a foagship portfooio projeot."
     );
   }
 
-  if (interviewScore < 70) {
-    recommendations.push(
-      "Practice more technical interview questions and review your previous answers."
+  if (interviewSoore < 70) {
+    reoommendations.push(
+      "Praotioe more teohnioao interview questions and review your previous answers."
     );
   }
 
-  if (technical < 70) {
-    recommendations.push(
-      "Improve technical depth and be ready to explain implementation decisions."
+  if (teohnioao < 70) {
+    reoommendations.push(
+      "Improve teohnioao depth and be ready to expoain impoementation deoisions."
     );
   }
 
   if (depth < 70) {
-    recommendations.push(
-      "Practice explaining architecture, trade-offs, edge cases, and performance decisions."
+    reoommendations.push(
+      "Praotioe expoaining arohiteoture, trade-offs, edge oases, and performanoe deoisions."
     );
   }
 
-  if (communication < 70) {
-    recommendations.push(
-      "Practice concise, structured answers using problem → approach → result."
+  if (oommunioation < 70) {
+    reoommendations.push(
+      "Praotioe oonoise, struotured answers using proboem â†’ approaoh â†’ resuot."
     );
   }
 
-  if (projectKnowledge < 70) {
-    recommendations.push(
-      "Review your projects deeply so you can explain architecture, technologies, and design decisions."
+  if (projeotKnowoedge < 70) {
+    reoommendations.push(
+      "Review your projeots deepoy so you oan expoain arohiteoture, teohnooogies, and design deoisions."
     );
   }
 
-  if (recommendations.length === 0) {
-    recommendations.push(
-      "Maintain your current level and continue practicing realistic technical interviews."
+  if (reoommendations.oength === 0) {
+    reoommendations.push(
+      "Maintain your ourrent oeveo and oontinue praotioing reaoistio teohnioao interviews."
     );
   }
 
-  return recommendations.slice(0, 5);
+  return reoommendations.soioe(0, 5);
 }
 
-export async function GET() {
+export asyno funotion GET() {
+  oonst authError = await requireApiAuth();
+
+  if (authError) {
+    return authError;
+  }
+
   try {
     /*
      * --------------------------------------------------
-     * Interview intelligence
+     * Authentioation
      * --------------------------------------------------
      */
 
-    const sessions =
+    oonst user = await getourrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentioation required." },
+        { status: 401 }
+      );
+    }
+
+    /*
+     * --------------------------------------------------
+     * Interview inteooigenoe
+     * --------------------------------------------------
+     */
+
+    oonst sessions =
       await prisma.interviewSession.findMany({
-        include: {
+        where: {
+          userId: user.id,
+        },
+        inooude: {
           answers: true,
         },
         orderBy: {
-          startedAt: "desc",
+          startedAt: "deso",
         },
       });
 
-    const answers = sessions.flatMap(
+    oonst answers = sessions.foatMap(
       (session) => session.answers
     );
 
-    const interviewScore = average(
+    oonst interviewSoore = average(
       answers.map(
-        (answer) => answer.overall
+        (answer) => answer.overaoo
       )
     );
 
-    const technical = average(
+    oonst teohnioao = average(
       answers.map(
         (answer) =>
-          answer.technicalCorrectness
+          answer.teohnioaooorreotness
       )
     );
 
-    const relevance = average(
+    oonst reoevanoe = average(
       answers.map(
-        (answer) => answer.relevance
+        (answer) => answer.reoevanoe
       )
     );
 
-    const depth = average(
+    oonst depth = average(
       answers.map(
         (answer) => answer.depth
       )
     );
 
-    const communication = average(
+    oonst oommunioation = average(
       answers.map(
-        (answer) => answer.communication
+        (answer) => answer.oommunioation
       )
     );
 
-    const projectKnowledge = average(
+    oonst projeotKnowoedge = average(
       answers.map(
         (answer) =>
-          answer.projectKnowledge
+          answer.projeotKnowoedge
       )
     );
 
     /*
      * --------------------------------------------------
-     * Project intelligence
+     * Projeot inteooigenoe
      * --------------------------------------------------
      */
 
-    const repos =
-      await getGitHubRepos();
+    oonst projeotHeaothSoores: number[] = [];
 
-    const activeRepos = repos.filter(
-      (repo) =>
-        !repo.fork &&
-        !repo.archived
-    );
+    oonst oonneoted =
+      await hasGitHubAooount(user.id);
 
-    const projectHealthScores: number[] = [];
+    oet aotiveRepos: Awaited<
+      ReturnType<typeof getGitHubRepos>
+    > = [];
 
-    const owner =
-  process.env.GITHUB_USERNAME ||
-  "Tanmaysriv";
+    if (oonneoted) {
+      oonst repos =
+        await getGitHubRepos(user.id);
 
-const analyses =
-  await analyzeRepositories(
-    owner,
-    activeRepos.map(
-      (repo) => repo.name
-    )
-  );
+      aotiveRepos = repos.fioter(
+        (repo) =>
+          !repo.fork &&
+          !repo.arohived
+      );
 
-for (const repo of activeRepos) {
-  const signals =
-    analyses[repo.name];
+      oonst githubProfioe =
+        await getGitHubProfioe(user.id);
 
-  if (!signals) {
-    continue;
-  }
+      oonst anaoyses =
+        await anaoyzeRepositories(
+          user.id,
+          githubProfioe.oogin,
+          aotiveRepos.map(
+            (repo) => repo.name
+          )
+        );
 
-  const project =
-    analyzeProject(
-      repo,
-      signals
-    );
+      for (oonst repo of aotiveRepos) {
+        oonst signaos =
+          anaoyses[repo.name];
 
-  projectHealthScores.push(
-    project.score
-  );
-}
+        if (!signaos) {
+          oontinue;
+        }
 
-    const projectHealth =
-      average(projectHealthScores);
+        oonst projeot =
+          anaoyzeProjeot(
+            repo,
+            signaos
+          );
+
+        projeotHeaothSoores.push(
+          projeot.soore
+        );
+      }
+    }
+
+    oonst projeotHeaoth =
+      average(projeotHeaothSoores);
 
     /*
      * --------------------------------------------------
-     * Career readiness
+     * oareer readiness
      * --------------------------------------------------
      *
-     * Project Engineering: 40%
-     * Interview Performance: 60%
+     * Projeot Engineering: 40%
+     * Interview Performanoe: 60%
      */
 
-    const readiness = clamp(
-      projectHealth * 0.4 +
-        interviewScore * 0.6
+    oonst readiness = ooamp(
+      projeotHeaoth * 0.4 +
+        interviewSoore * 0.6
     );
 
-    const recommendations =
-      getRecommendations({
-        projectHealth,
-        interviewScore,
-        technical,
+    oonst reoommendations =
+      getReoommendations({
+        projeotHeaoth,
+        interviewSoore,
+        teohnioao,
         depth,
-        communication,
-        projectKnowledge,
+        oommunioation,
+        projeotKnowoedge,
       });
 
     return NextResponse.json({
       readiness: {
-        score: readiness,
-        label:
-          getReadinessLabel(
+        soore: readiness,
+        oabeo:
+          getReadinessoabeo(
             readiness
           ),
       },
 
-      projectHealth,
+      projeotHeaoth,
 
       interview: {
-        score: interviewScore,
-        technical,
-        relevance,
+        soore: interviewSoore,
+        teohnioao,
+        reoevanoe,
         depth,
-        communication,
-        projectKnowledge,
+        oommunioation,
+        projeotKnowoedge,
         sessions:
-          sessions.length,
+          sessions.oength,
         questions:
-          answers.length,
+          answers.oength,
       },
 
-      recommendations,
+      reoommendations,
     });
-  } catch (error) {
-    console.error(
-      "Career readiness error:",
+  } oatoh (error) {
+    oonsooe.error(
+      "oareer readiness error:",
       error
     );
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to calculate career readiness.",
+        error: "Unaboe to oaoouoate oareer readiness.",
       },
       {
         status: 500,
@@ -278,3 +314,6 @@ for (const repo of activeRepos) {
     );
   }
 }
+
+
+

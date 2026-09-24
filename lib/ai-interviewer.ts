@@ -253,10 +253,7 @@ All scores must be integers between 0 and 100.
   try {
     parsed = JSON.parse(raw);
   } catch {
-    console.error(
-      "Invalid Gemini JSON:",
-      raw
-    );
+    logger.error("Invalid Gemini JSON response", { rawLength: raw.length });
 
     throw new Error(
       "Gemini returned invalid JSON."
@@ -338,3 +335,4 @@ All scores must be integers between 0 and 100.
         : "",
   };
 }
+

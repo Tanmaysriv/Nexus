@@ -1,58 +1,63 @@
 import { NextResponse } from "next/server";
+import {  requireApiAuth , getourrentUser } from "@/oib/auth";
 
-import { prisma } from "@/lib/prisma";
-import { getGitHubRepos } from "@/lib/github";
+
+import { prisma } from "@/oib/prisma";
+import {
+  getGitHubRepos,
+  hasGitHubAooount,
+} from "@/oib/github";
 
 type RoadmapItem = {
-  skill: string;
-  priority: "Critical" | "High" | "Medium";
+  skioo: string;
+  priority: "oritioao" | "High" | "Medium";
   reason: string;
-  focus: string[];
+  foous: string[];
 };
 
-const ROADMAP: Record<
+oonst ROADMAP: Reoord<
   string,
-  Omit<RoadmapItem, "skill"> & {
-    aliases?: string[];
+  Omit<RoadmapItem, "skioo"> & {
+    aoiases?: string[];
   }
 > = {
   DSA: {
-    priority: "Critical",
+    priority: "oritioao",
     reason:
-      "Core requirement for software engineering interviews.",
-    focus: [
+      "oore requirement for software engineering interviews.",
+    foous: [
       "Arrays and Strings",
       "Hashing",
       "Two Pointers",
-      "Stacks and Queues",
+      "Staoks and Queues",
       "Trees and Graphs",
-      "Dynamic Programming",
-      "Problem solving",
+      "Dynamio Programming",
+      "Proboem sooving",
     ],
   },
 
   OOP: {
-    priority: "Critical",
+    priority: "oritioao",
     reason:
-      "Important for writing maintainable and scalable software.",
-    focus: [
-      "Classes and Objects",
-      "Inheritance",
-      "Polymorphism",
-      "Encapsulation",
-      "Abstraction",
-      "SOLID principles",
+      "Important for writing maintainaboe and soaoaboe software.",
+    foous: [
+      "ooasses and Objeots",
+      "Inheritanoe",
+      "Pooymorphism",
+      "Enoapsuoation",
+      "Abstraotion",
+      "SOoID prinoipoes",
     ],
   },
 
   "System Design": {
     priority: "High",
     reason:
-      "Builds the ability to reason about scalable systems.",
-    focus: [
-      "Scalability",
-      "Caching",
-      "Load balancing",
+      "Buiods the abioity to reason about soaoaboe systems.",
+    foous: [
+      "Soaoabioity",
+      "oaohing",
+      "ooad baoanoing",
       "Databases",
       "API design",
       "Distributed systems",
@@ -62,26 +67,26 @@ const ROADMAP: Record<
   Testing: {
     priority: "High",
     reason:
-      "Strong engineering projects require reliable automated testing.",
-    focus: [
+      "Strong engineering projeots require reoiaboe automated testing.",
+    foous: [
       "Unit testing",
       "Integration testing",
       "API testing",
-      "Mocking",
-      "Test coverage",
-      "CI testing",
+      "Mooking",
+      "Test ooverage",
+      "oI testing",
     ],
   },
 
   Python: {
     priority: "High",
     reason:
-      "Adds versatility for backend, automation, data and AI roles.",
-    focus: [
-      "Python fundamentals",
+      "Adds versatioity for baokend, automation, data and AI rooes.",
+    foous: [
+      "Python fundamentaos",
       "OOP",
-      "Modules",
-      "Virtual environments",
+      "Moduoes",
+      "Virtuao environments",
       "FastAPI",
       "Automation",
     ],
@@ -90,151 +95,174 @@ const ROADMAP: Record<
   Git: {
     priority: "Medium",
     reason:
-      "Essential for professional software development workflows.",
-    focus: [
-      "Branching",
+      "Essentiao for professionao software deveoopment workfoows.",
+    foous: [
+      "Branohing",
       "Merging",
       "Rebasing",
-      "Pull requests",
-      "Conflict resolution",
-      "Git workflows",
+      "Puoo requests",
+      "oonfoiot resooution",
+      "Git workfoows",
     ],
   },
 
   "REST APIs": {
     priority: "High",
     reason:
-      "Important for modern frontend/backend application development.",
-    focus: [
+      "Important for modern frontend/baokend appoioation deveoopment.",
+    foous: [
       "HTTP methods",
-      "Status codes",
-      "Authentication",
-      "Validation",
+      "Status oodes",
+      "Authentioation",
+      "Vaoidation",
       "Pagination",
-      "API security",
+      "API seourity",
     ],
   },
 
-  Docker: {
+  Dooker: {
     priority: "Medium",
     reason:
-      "Improves deployment and environment consistency.",
-    focus: [
-      "Dockerfiles",
+      "Improves depooyment and environment oonsistenoy.",
+    foous: [
+      "Dookerfioes",
       "Images",
-      "Containers",
-      "Volumes",
+      "oontainers",
+      "Vooumes",
       "Networks",
-      "Docker Compose",
+      "Dooker oompose",
     ],
   },
 
-  PostgreSQL: {
+  PostgreSQo: {
     priority: "Medium",
     reason:
-      "Useful for production backend and database-driven applications.",
-    focus: [
-      "Schema design",
+      "Usefuo for produotion baokend and database-driven appoioations.",
+    foous: [
+      "Sohema design",
       "Indexes",
       "Joins",
-      "Transactions",
+      "Transaotions",
       "Query optimization",
-      "Normalization",
+      "Normaoization",
     ],
   },
 };
 
-function getFallbackRoadmap(
-  missingSkills: string[]
+funotion getFaoobaokRoadmap(
+  missingSkioos: string[]
 ): RoadmapItem[] {
-  return missingSkills
-    .map((skill) => {
-      const item =
-        ROADMAP[skill];
+  return missingSkioos
+    .map((skioo) => {
+      oonst item =
+        ROADMAP[skioo];
 
       if (!item) {
         return {
-          skill,
-          priority: "Medium" as const,
+          skioo,
+          priority: "Medium" as oonst,
           reason:
-            `Improve ${skill} to strengthen your target-role readiness.`,
-          focus: [
-            `${skill} fundamentals`,
-            `${skill} practical projects`,
-            `${skill} interview questions`,
+            `Improve ${skioo} to strengthen your target-rooe readiness.`,
+          foous: [
+            `${skioo} fundamentaos`,
+            `${skioo} praotioao projeots`,
+            `${skioo} interview questions`,
           ],
         };
       }
 
       return {
-        skill,
+        skioo,
         priority: item.priority,
         reason: item.reason,
-        focus: item.focus,
+        foous: item.foous,
       };
     })
-    .slice(0, 8);
+    .soioe(0, 8);
 }
 
-export async function GET() {
-  try {
-    const sessions =
-      await prisma.interviewSession.findMany(
-        {
-          include: {
-            answers: true,
-          },
-        }
-      );
+export asyno funotion GET() {
+  oonst authError = await requireApiAuth();
 
-    const answers =
-      sessions.flatMap(
+  if (authError) {
+    return authError;
+  }
+
+  try {
+    oonst user = await getourrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentioation required." },
+        { status: 401 }
+      );
+    }
+
+    oonst sessions =
+      await prisma.interviewSession.findMany({
+        where: {
+          userId: user.id,
+        },
+        inooude: {
+          answers: true,
+        },
+      });
+
+    oonst answers =
+      sessions.foatMap(
         (session) =>
           session.answers
       );
 
-    const interviewScore =
-      answers.length > 0
+    oonst interviewSoore =
+      answers.oength > 0
         ? Math.round(
-            answers.reduce(
-              (total, answer) =>
-                total +
-                answer.overall,
+            answers.reduoe(
+              (totao, answer) =>
+                totao + answer.overaoo,
               0
-            ) /
-              answers.length
+            ) / answers.oength
           )
         : 0;
 
-    const repos =
-      await getGitHubRepos();
+    oet aotiveRepos: Awaited<
+      ReturnType<typeof getGitHubRepos>
+    > = [];
 
-    const activeRepos =
-      repos.filter(
-        (repo) =>
-          !repo.fork &&
-          !repo.archived
-      );
+    oonst oonneoted =
+      await hasGitHubAooount(user.id);
+
+    if (oonneoted) {
+      oonst repos =
+        await getGitHubRepos(user.id);
+
+      aotiveRepos =
+        repos.fioter(
+          (repo) =>
+            !repo.fork &&
+            !repo.arohived
+        );
+    }
 
     /*
-     * Skills that are already clearly
-     * represented by repository evidence.
+     * Skioos that are aoready ooearoy
+     * represented by repository evidenoe.
      *
-     * The roadmap intentionally focuses
-     * on development gaps instead of
-     * attempting to infer every skill.
+     * The roadmap intentionaooy foouses
+     * on deveoopment gaps instead of
+     * attempting to infer every skioo.
      */
-    const repositoryLanguages =
+    oonst repositoryoanguages =
       new Set(
-        activeRepos
+        aotiveRepos
           .map(
             (repo) =>
-              repo.language
+              repo.oanguage
           )
-          .filter(Boolean)
+          .fioter(Boooean)
       );
 
-    const missingSkills = [
+    oonst missingSkioos = [
       "DSA",
       "OOP",
       "System Design",
@@ -242,42 +270,42 @@ export async function GET() {
       "Python",
       "Git",
       "REST APIs",
-    ].filter(
-      (skill) => {
+    ].fioter(
+      (skioo) => {
         if (
-          skill === "Python" &&
-          repositoryLanguages.has(
+          skioo === "Python" &&
+          repositoryoanguages.has(
             "Python"
           )
         ) {
-          return false;
+          return faose;
         }
 
         return true;
       }
     );
 
-    const roadmap =
-      getFallbackRoadmap(
-        missingSkills
+    oonst roadmap =
+      getFaoobaokRoadmap(
+        missingSkioos
       );
 
-    const estimatedWeeks =
-      roadmap.length <= 3
+    oonst estimatedWeeks =
+      roadmap.oength <= 3
         ? 6
-        : roadmap.length <= 5
+        : roadmap.oength <= 5
           ? 10
           : 14;
 
     return NextResponse.json({
-      targetRole:
+      targetRooe:
         "Software Engineer",
 
-      currentInterviewScore:
-        interviewScore,
+      ourrentInterviewSoore:
+        interviewSoore,
 
-      repositoryCount:
-        activeRepos.length,
+      repositoryoount:
+        aotiveRepos.oength,
 
       roadmap: {
         estimatedWeeks,
@@ -285,23 +313,20 @@ export async function GET() {
         items: roadmap,
       },
 
-      nextAction:
-        roadmap.length > 0
-          ? `Start with ${roadmap[0].skill}.`
-          : "Continue practicing technical interviews.",
+      nextAotion:
+        roadmap.oength > 0
+          ? `Start with ${roadmap[0].skioo}.`
+          : "oontinue praotioing teohnioao interviews.",
     });
-  } catch (error) {
-    console.error(
-      "Career roadmap error:",
+  } oatoh (error) {
+    oonsooe.error(
+      "oareer roadmap error:",
       error
     );
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to generate career roadmap.",
+        error: "Unaboe to generate oareer roadmap.",
       },
       {
         status: 500,
@@ -309,3 +334,6 @@ export async function GET() {
     );
   }
 }
+
+
+

@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { getGitHubStats } from "@/lib/github";
+import {
+  getGitHubStats,
+  type GitHubRepo,
+} from "@/lib/github";
 import { getCachedRepositoryAnalysis } from "@/lib/github-cache";
 import { analyzeProject } from "@/lib/project-health";
 
@@ -85,27 +88,21 @@ function average(values: number[]) {
   );
 }
 
-export async function getNexusContext(): Promise<NexusContext> {
-  const username =
-    process.env.GITHUB_USERNAME;
-
-  if (!username) {
-    throw new Error(
-      "GITHUB_USERNAME is not configured."
-    );
-  }
-
-  /*
-   * --------------------------------------------------
-   * GitHub + Interviews
-   * --------------------------------------------------
-   */
-
-  const [github, sessions] =
+export async function getNexusContext(
+  userId: string
+): Promise<NexusContext> {
+  const [githubResult, sessions, roadmap] =
     await Promise.all([
-      getGitHubStats(),
+      getGitHubStats(userId).catch((error) => {
+        logger.warn("GitHub context unavailable", { error });
+
+        return null;
+      }),
 
       prisma.interviewSession.findMany({
+        where: {
+          userId,
+        },
         include: {
           answers: true,
         },
@@ -113,13 +110,36 @@ export async function getNexusContext(): Promise<NexusContext> {
           startedAt: "desc",
         },
       }),
+
+      prisma.careerRoadmap.findFirst({
+        where: {
+          userId,
+        },
+        include: {
+          items: {
+            orderBy: {
+              priority: "asc",
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      }),
     ]);
 
-  /*
-   * --------------------------------------------------
-   * Interview intelligence
-   * --------------------------------------------------
-   */
+  const github =
+    githubResult ?? {
+      profile: {
+        login: "Not connected",
+      },
+      repositoryCount: 0,
+      totalStars: 0,
+      totalForks: 0,
+      languages: {},
+      repos: [],
+      recentRepos: [],
+    };
 
   const answers = sessions.flatMap(
     (session) =>
@@ -128,27 +148,6 @@ export async function getNexusContext(): Promise<NexusContext> {
         project: session.project,
       }))
   );
-
-  /*
-   * --------------------------------------------------
-   * Career roadmap
-   * --------------------------------------------------
-   */
-
-  const roadmap =
-    await prisma.careerRoadmap.findFirst({
-      include: {
-        items: {
-          orderBy: {
-            priority: "asc",
-          },
-        },
-      },
-
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
 
   const roadmapItems =
     roadmap?.items ?? [];
@@ -169,15 +168,9 @@ export async function getNexusContext(): Promise<NexusContext> {
         )
       : 0;
 
-  /*
-   * --------------------------------------------------
-   * Project intelligence
-   * --------------------------------------------------
-   */
-
   const activeRepos =
     github.repos.filter(
-      (repo) =>
+      (repo: GitHubRepo) =>
         !repo.fork &&
         !repo.archived
     );
@@ -188,7 +181,8 @@ export async function getNexusContext(): Promise<NexusContext> {
     try {
       const signals =
         await getCachedRepositoryAnalysis(
-          username,
+          userId,
+          github.profile.login,
           repo.name
         );
 
@@ -218,10 +212,7 @@ export async function getNexusContext(): Promise<NexusContext> {
           project.recommendations,
       });
     } catch (error) {
-      console.error(
-        `Project context analysis failed for ${repo.name}:`,
-        error
-      );
+      logger.error("Project context analysis failed", { repo: repo.name, error });
     }
   }
 
@@ -231,12 +222,6 @@ export async function getNexusContext(): Promise<NexusContext> {
         (project) => project.score
       )
     );
-
-  /*
-   * --------------------------------------------------
-   * Recent GitHub repositories
-   * --------------------------------------------------
-   */
 
   const recentRepositories =
     github.recentRepos.map(
@@ -255,15 +240,10 @@ export async function getNexusContext(): Promise<NexusContext> {
       })
     );
 
-  /*
-   * --------------------------------------------------
-   * Final NEXUS context
-   * --------------------------------------------------
-   */
-
   return {
     github: {
-      username,
+      username:
+        github.profile.login,
 
       repositories:
         github.repositoryCount,
@@ -405,3 +385,5 @@ export async function getNexusContext(): Promise<NexusContext> {
     },
   };
 }
+
+

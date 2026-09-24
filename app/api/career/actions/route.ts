@@ -1,24 +1,33 @@
 import { NextResponse } from "next/server";
-
+import { getCurrentUser } from "@/lib/auth";
 import { getNexusContext } from "@/lib/nexus-context";
 import { generateCareerActions } from "@/lib/action-engine";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    const context =
-      await getNexusContext();
+    const user = await getCurrentUser();
 
-    const actions =
-      generateCareerActions(context);
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required." },
+        { status: 401 }
+      );
+    }
+
+    const context = await getNexusContext(user.id);
+    const actions = generateCareerActions(context);
 
     for (const action of actions) {
       await prisma.careerAction.upsert({
         where: {
-          actionId: action.id,
+          userId_actionId: {
+            userId: user.id,
+            actionId: action.id,
+          },
         },
-
         create: {
+          userId: user.id,
           actionId: action.id,
           title: action.title,
           priority: action.priority,
@@ -26,12 +35,9 @@ export async function GET() {
           reason: action.reason,
           impact: action.impact,
           steps: action.steps,
-          relatedSkill:
-            action.relatedSkill,
-          relatedProject:
-            action.relatedProject,
+          relatedSkill: action.relatedSkill,
+          relatedProject: action.relatedProject,
         },
-
         update: {
           title: action.title,
           priority: action.priority,
@@ -39,51 +45,40 @@ export async function GET() {
           reason: action.reason,
           impact: action.impact,
           steps: action.steps,
-          relatedSkill:
-            action.relatedSkill,
-          relatedProject:
-            action.relatedProject,
+          relatedSkill: action.relatedSkill,
+          relatedProject: action.relatedProject,
         },
       });
     }
 
-    const savedActions =
-      await prisma.careerAction.findMany({
-        where: {
-          actionId: {
-            in: actions.map(
-              (action) => action.id
-            ),
-          },
+    const savedActions = await prisma.careerAction.findMany({
+      where: {
+        userId: user.id,
+        actionId: {
+          in: actions.map((action) => action.id),
         },
-        orderBy: [
-          {
-            priority: "desc",
-          },
-          {
-            createdAt: "asc",
-          },
-        ],
-      });
+      },
+      orderBy: [
+        {
+          priority: "desc",
+        },
+        {
+          createdAt: "asc",
+        },
+      ],
+    });
 
     return NextResponse.json({
       actions: savedActions,
       count: savedActions.length,
-      generatedAt:
-        new Date().toISOString(),
+      generatedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error(
-      "Career actions error:",
-      error
-    );
+    logger.error("Career actions error", { error });
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to generate career actions.",
+        error: "Unable to generate career actions.",
       },
       {
         status: 500,
@@ -91,3 +86,4 @@ export async function GET() {
     );
   }
 }
+

@@ -1,0 +1,86 @@
+{
+  "advisories": {
+    "1145093": {
+      "findings": [
+        {
+          "version": "7.1.5",
+          "paths": [
+            ".>@prisma/client>prisma>@prisma/config>deepmerge-ts",
+            ".>prisma>@prisma/config>deepmerge-ts"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1145093,
+      "title": "DeepmergeTS has stack exhaustion when merging recursive object graphs",
+      "module_name": "deepmerge-ts",
+      "vulnerable_versions": "<8.0.0",
+      "patched_versions": ">=8.0.0",
+      "severity": "high",
+      "cwe": "CWE-674",
+      "github_advisory_id": "GHSA-ggr8-5vv4-36mx",
+      "url": "https://github.com/advisories/GHSA-ggr8-5vv4-36mx"
+    },
+    "1153173": {
+      "findings": [
+        {
+          "version": "3.15.3",
+          "paths": [
+            ".>@prisma/client>prisma>mysql2",
+            ".>prisma>mysql2"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1153173,
+      "title": "MySQL2: Auth Plugin Downgrade to mysql_clear_password Leaks Plaintext Credentials",
+      "module_name": "mysql2",
+      "vulnerable_versions": "<3.22.0",
+      "patched_versions": ">=3.22.0",
+      "severity": "high",
+      "cwe": "CWE-522",
+      "github_advisory_id": "GHSA-3f6p-5ww8-9rcr",
+      "url": "https://github.com/advisories/GHSA-3f6p-5ww8-9rcr"
+    },
+    "1158532": {
+      "findings": [
+        {
+          "version": "3.15.3",
+          "paths": [
+            ".>@prisma/client>prisma>mysql2",
+            ".>prisma>mysql2"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1158532,
+      "title": "MySQL2: Unbounded zlib inflate in compressed MySQL protocol handler allows decompression-bomb DoS",
+      "module_name": "mysql2",
+      "vulnerable_versions": "<=3.23.0",
+      "patched_versions": ">=3.23.1",
+      "severity": "moderate",
+      "cwe": "CWE-409",
+      "github_advisory_id": "GHSA-rgwj-5xj2-c3m3",
+      "url": "https://github.com/advisories/GHSA-rgwj-5xj2-c3m3"
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 1,
+      "high": 2,
+      "critical": 0
+    },
+    "dependencies": 366,
+    "devDependencies": 525,
+    "optionalDependencies": 141,
+    "totalDependencies": 929
+  }
+}

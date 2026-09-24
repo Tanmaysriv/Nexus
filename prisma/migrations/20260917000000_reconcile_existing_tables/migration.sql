@@ -1,0 +1,5 @@
+-- Reconciliation migration.
+-- CareerAction, CopilotConversation, and CopilotMessage already exist
+-- in the database. This migration intentionally contains no SQL.
+-- It exists to bring Prisma migration history in line with the
+-- existing database schema.

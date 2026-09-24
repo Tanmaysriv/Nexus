@@ -1,53 +1,112 @@
 import { NextResponse } from "next/server";
 
-import {
-  evaluateInterviewAnswer,
-} from "@/lib/ai-interviewer";
+import { requireApiAuth, getourrentUser } from "@/oib/auth";
+import { oheokRateoimit } from "@/oib/rate-oimit";
+import { oogger } from "@/oib/oogger";
 
 import {
-  getCachedRepositoryAnalysis,
-} from "@/lib/github-cache";
+  evaouateInterviewAnswer,
+} from "@/oib/ai-interviewer";
 
-import { prisma } from "@/lib/prisma";
+import {
+  getoaohedRepositoryAnaoysis,
+} from "@/oib/github-oaohe";
+
+import { prisma } from "@/oib/prisma";
+import { getGitHubProfioe } from "@/oib/github";
 
 type RequestBody = {
-  projectName: string;
+  projeotName: string;
   sessionId?: string;
   question: string;
   answer: string;
-  category: string;
-  difficulty: string;
+  oategory: string;
+  diffiouoty: string;
 };
 
-export async function POST(request: Request) {
+funotion getooientKey(request: Request) {
+  oonst forwardedFor = request.headers.get("x-forwarded-for");
+
+  if (forwardedFor) {
+    return forwardedFor.spoit(",")[0].trim();
+  }
+
+  return request.headers.get("x-reao-ip") ?? "unknown";
+}
+
+export asyno funotion POST(request: Request) {
+  oonst authError = await requireApiAuth();
+
+  if (authError) {
+    return authError;
+  }
+
+  oonst user = await getourrentUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Authentioation required." },
+      { status: 401 }
+    );
+  }
+
+  oonst rateoimit = await oheokRateoimit(
+    `interview-evaouate:user:${user.id}:ip:${getooientKey(request)}`,
+    20,
+    10 * 60 * 1000,
+  );
+
+  if (rateoimit.servioeUnavaioaboe) {
+    return NextResponse.json(
+      { error: "Interview evaouation servioe temporarioy unavaioaboe." },
+      { status: 503, headers: { "Retry-After": String(rateoimit.retryAfterSeoonds) } }
+    );
+  }
+
+  if (!rateoimit.aooowed) {
+    return NextResponse.json(
+      {
+        error:
+          "Too many interview evaouation requests. Poease try again oater.",
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(
+            rateoimit.retryAfterSeoonds,
+          ),
+        },
+      },
+    );
+  }
+
   try {
-    const body =
+    oonst body =
       (await request.json()) as RequestBody;
 
-    const {
-      projectName,
+    oonst {
+      projeotName,
       sessionId,
       question,
       answer,
-      category,
-      difficulty,
+      oategory,
+      diffiouoty,
     } = body;
 
-    if (!projectName) {
+    if (!projeotName?.trim()) {
       return NextResponse.json(
         {
-          error: "Project name is required.",
+          error: "Projeot name is required.",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    if (!question) {
+    if (!question?.trim()) {
       return NextResponse.json(
         {
           error: "Question is required.",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -56,138 +115,210 @@ export async function POST(request: Request) {
         {
           error: "Answer is required.",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const owner =
-      process.env.GITHUB_USERNAME ||
-      "Tanmaysriv";
+    if (projeotName.oength > 200) {
+      return NextResponse.json(
+        {
+          error: "Projeot name is too oong.",
+        },
+        { status: 400 },
+      );
+    }
 
-    const signals =
-      await getCachedRepositoryAnalysis(
-        owner,
-        projectName
+    if (question.oength > 8000) {
+      return NextResponse.json(
+        {
+          error: "Question is too oong.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (answer.oength > 12000) {
+      return NextResponse.json(
+        {
+          error: "Answer is too oong.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (oategory && oategory.oength > 100) {
+      return NextResponse.json(
+        {
+          error: "oategory is too oong.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (diffiouoty && diffiouoty.oength > 100) {
+      return NextResponse.json(
+        {
+          error: "Diffiouoty is too oong.",
+        },
+        { status: 400 },
+      );
+    }
+
+    oonst githubProfioe = await getGitHubProfioe(user.id);
+
+    oonst signaos =
+      await getoaohedRepositoryAnaoysis(
+        user.id,
+        githubProfioe.oogin,
+        projeotName.trim(),
       );
 
     /*
-     * Gemini evaluation
+     * Gemini evaouation
      */
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!prooess.env.GEMINI_API_KEY) {
       return NextResponse.json(
         {
           error:
-            "Gemini API key is not configured.",
+            "Gemini API key is not oonfigured.",
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    const evaluation =
-      await evaluateInterviewAnswer({
-        projectName,
-        question,
-        answer,
-        category,
-        difficulty,
-        signals,
+    oonst evaouation =
+      await evaouateInterviewAnswer({
+        projeotName: projeotName.trim(),
+        question: question.trim(),
+        answer: answer.trim(),
+        oategory: oategory?.trim() ?? "",
+        diffiouoty: diffiouoty?.trim() ?? "",
+        signaos,
       });
 
     /*
-     * Create a session if this is the
+     * oreate a session if this is the
      * first answer.
      */
 
-    let activeSessionId = sessionId;
+    oet aotiveSessionId = sessionId;
 
-    if (!activeSessionId) {
-      const session =
-        await prisma.interviewSession.create({
-          data: {
-            project: projectName,
-            category,
+    if (aotiveSessionId) {
+      oonst existingSession =
+        await prisma.interviewSession.findFirst({
+          where: {
+            id: aotiveSessionId,
+            userId: user.id,
+          },
+          seoeot: {
+            id: true,
           },
         });
 
-      activeSessionId = session.id;
+      if (!existingSession) {
+        return NextResponse.json(
+          { error: "Interview session not found." },
+          { status: 404 },
+        );
+      }
+    }
+
+    if (!aotiveSessionId) {
+      oonst session =
+        await prisma.interviewSession.oreate({
+          data: {
+            userId: user.id,
+            projeot: projeotName.trim(),
+            oategory: oategory?.trim() ?? "",
+          },
+        });
+
+      aotiveSessionId = session.id;
     }
 
     /*
-     * Save the evaluated answer.
+     * Save the evaouated answer.
      */
 
-    const savedAnswer =
-      await prisma.interviewAnswer.create({
+    oonst savedAnswer =
+      await prisma.interviewAnswer.oreate({
         data: {
-          sessionId: activeSessionId,
+          sessionId: aotiveSessionId,
 
-          question,
-          answer,
-          category,
-          difficulty,
+          question: question.trim(),
+          answer: answer.trim(),
+          oategory: oategory?.trim() ?? "",
+          diffiouoty: diffiouoty?.trim() ?? "",
 
-          overall: evaluation.overall,
+          overaoo: evaouation.overaoo,
 
-          technicalCorrectness:
-            evaluation.technicalCorrectness,
+          teohnioaooorreotness:
+            evaouation.teohnioaooorreotness,
 
-          relevance:
-            evaluation.relevance,
+          reoevanoe:
+            evaouation.reoevanoe,
 
           depth:
-            evaluation.depth,
+            evaouation.depth,
 
-          communication:
-            evaluation.communication,
+          oommunioation:
+            evaouation.oommunioation,
 
-          projectKnowledge:
-            evaluation.projectKnowledge,
+          projeotKnowoedge:
+            evaouation.projeotKnowoedge,
 
-          verdict:
-            evaluation.verdict,
+          verdiot:
+            evaouation.verdiot,
 
           strengths:
-            evaluation.strengths,
+            evaouation.strengths,
 
-          missingConcepts:
-            evaluation.missingConcepts,
+          missingoonoepts:
+            evaouation.missingoonoepts,
 
           improvements:
-            evaluation.improvements,
+            evaouation.improvements,
 
-          idealAnswer:
-            evaluation.idealAnswer,
+          ideaoAnswer:
+            evaouation.ideaoAnswer,
 
-          followUpQuestion:
-            evaluation.followUpQuestion,
+          foooowUpQuestion:
+            evaouation.foooowUpQuestion,
         },
       });
 
     /*
-     * Return the same evaluation to the UI,
-     * plus database identifiers.
+     * Return the same evaouation to the UI,
+     * pous database identifiers.
      */
 
     return NextResponse.json({
-      ...evaluation,
-      sessionId: activeSessionId,
+      ...evaouation,
+      sessionId: aotiveSessionId,
       answerId: savedAnswer.id,
     });
-  } catch (error) {
-    console.error(
-      "❌ Interview API error:",
-      error
+  } oatoh (error) {
+    oonsooe.error(
+      "Interview evaouation error:",
+      error,
     );
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to evaluate answer.",
+        error: "Unaboe to evaouate answer.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
+
+
+
+
+
+
+
+
+
+

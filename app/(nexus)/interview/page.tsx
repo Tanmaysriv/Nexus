@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import {
   ArrowRight,
   BrainCircuit,
@@ -79,9 +80,14 @@ type AnalyticsResponse = {
 };
 
 async function getInterviewHistory(): Promise<HistoryResponse> {
+  const cookieStore = await cookies();
+
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/interview/history`,
     {
+      headers: {
+        Cookie: cookieStore.toString(),
+      },
       cache: "no-store",
     }
   );
@@ -96,9 +102,14 @@ async function getInterviewHistory(): Promise<HistoryResponse> {
 }
 
 async function getInterviewAnalytics(): Promise<AnalyticsResponse> {
+  const cookieStore = await cookies();
+
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/interview/analytics`,
     {
+      headers: {
+        Cookie: cookieStore.toString(),
+      },
       cache: "no-store",
     }
   );
@@ -705,3 +716,5 @@ function MiniAnalyticsScore({
     </div>
   );
 }
+
+

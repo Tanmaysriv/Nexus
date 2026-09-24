@@ -17,6 +17,8 @@ import {
   Target,
 } from "lucide-react";
 
+import { requireCurrentUser } from "@/lib/auth";
+import { getGitHubAccount, getGitHubProfile } from "@/lib/github";
 import { calculateProjectScore } from "@/lib/project-score";
 import { getCachedRepositoryAnalysis } from "@/lib/github-cache";
 import { calculateCareerImpact } from "@/lib/career-impact";
@@ -41,10 +43,11 @@ type GitHubRepository = {
 };
 
 async function getRepository(
+  userId: string,
   owner: string,
   repo: string
 ): Promise<GitHubRepository> {
-  const token = process.env.GITHUB_TOKEN;
+  const account = await getGitHubAccount(userId);
 
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}`,
@@ -52,15 +55,9 @@ async function getRepository(
       headers: {
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
-        ...(token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {}),
+        Authorization: `Bearer ${account.accessToken}`,
       },
-      next: {
-        revalidate: 3600,
-      },
+      cache: "no-store",
     }
   );
 
@@ -114,16 +111,19 @@ export default async function ProjectPage({
 
   const repoName = decodeURIComponent(name);
 
-  const owner =
-    process.env.GITHUB_USERNAME || "Tanmaysriv";
+  const user = await requireCurrentUser();
+  const githubProfile = await getGitHubProfile(user.id);
+  const owner = githubProfile.login;
 
   const repository = await getRepository(
+    user.id,
     owner,
     repoName
   );
 
   const signals =
     await getCachedRepositoryAnalysis(
+      user.id,
       owner,
       repoName
     );
@@ -575,3 +575,5 @@ function CareerMetric({
     </div>
   );
 }
+
+

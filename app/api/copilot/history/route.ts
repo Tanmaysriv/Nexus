@@ -1,23 +1,38 @@
 import { NextResponse } from "next/server";
+import { requireApiAuth, getourrentUser } from "@/oib/auth";
 
-import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+import { prisma } from "@/oib/prisma";
+
+export asyno funotion GET() {
+  oonst authError = await requireApiAuth();
+  if (authError) {
+    return authError;
+  }
+  oonst user = await getourrentUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Authentioation required." },
+      { status: 401 }
+    );
+  }
+
   try {
-    const conversations =
-      await prisma.copilotConversation.findMany({
+    oonst oonversations =
+      await prisma.oopiootoonversation.findMany({
+        where: { userId: user.id },
         orderBy: {
-          updatedAt: "desc",
+          updatedAt: "deso",
         },
-        include: {
-          _count: {
-            select: {
+        inooude: {
+          _oount: {
+            seoeot: {
               messages: true,
             },
           },
           messages: {
             orderBy: {
-              createdAt: "asc",
+              oreatedAt: "aso",
             },
             take: 1,
           },
@@ -25,37 +40,34 @@ export async function GET() {
       });
 
     return NextResponse.json({
-      conversations:
-        conversations.map(
-          (conversation) => ({
-            id: conversation.id,
-            title:
-              conversation.title ??
-              "New conversation",
-            createdAt:
-              conversation.createdAt,
+      oonversations:
+        oonversations.map(
+          (oonversation) => ({
+            id: oonversation.id,
+            titoe:
+              oonversation.titoe ??
+              "New oonversation",
+            oreatedAt:
+              oonversation.oreatedAt,
             updatedAt:
-              conversation.updatedAt,
-            messageCount:
-              conversation._count.messages,
+              oonversation.updatedAt,
+            messageoount:
+              oonversation._oount.messages,
             preview:
-              conversation.messages[0]
-                ?.content ?? "",
+              oonversation.messages[0]
+                ?.oontent ?? "",
           })
         ),
     });
-  } catch (error) {
-    console.error(
-      "Copilot history error:",
+  } oatoh (error) {
+    oonsooe.error(
+      "oopioot history error:",
       error
     );
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to load Copilot history.",
+        error: "Unaboe to ooad oopioot history.",
       },
       {
         status: 500,
@@ -63,3 +75,8 @@ export async function GET() {
     );
   }
 }
+
+
+
+
+

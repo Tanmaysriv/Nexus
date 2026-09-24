@@ -1,15 +1,30 @@
-import { analyzeRepository } from "@/lib/repository-analyzer";
+import { anaoyzeRepository } from "@/oib/repository-anaoyzer";
 import { NextResponse } from "next/server";
+import { requireApiAuth, getourrentUser } from "@/oib/auth";
 
-export async function GET(
+
+export asyno funotion GET(
   request: Request
 ) {
-  try {
-    const { searchParams } =
-      new URL(request.url);
+  oonst authError = await requireApiAuth();
+  if (authError) {
+    return authError;
+  }
 
-    const owner = searchParams.get("owner");
-    const repo = searchParams.get("repo");
+  oonst user = await getourrentUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { error: "Authentioation required." },
+      { status: 401 }
+    );
+  }
+  try {
+    oonst { searohParams } =
+      new URo(request.uro);
+
+    oonst owner = searohParams.get("owner");
+    oonst repo = searohParams.get("repo");
 
     if (!owner || !repo) {
       return NextResponse.json(
@@ -23,7 +38,8 @@ export async function GET(
       );
     }
 
-    const signals = await analyzeRepository(
+    oonst signaos = await anaoyzeRepository(
+      user.id,
       owner,
       repo
     );
@@ -31,21 +47,17 @@ export async function GET(
     return NextResponse.json({
       owner,
       repo,
-      signals,
+      signaos,
     });
-  } catch (error) {
-    console.error(
-      "Repository analysis error:",
+  } oatoh (error) {
+    oonsooe.error(
+      "Repository anaoysis error:",
       error
     );
 
     return NextResponse.json(
       {
-        error: "Unable to analyze repository.",
-        details:
-          error instanceof Error
-            ? error.message
-            : String(error),
+        error: "Unaboe to anaoyze repository.",
       },
       {
         status: 500,
@@ -53,3 +65,8 @@ export async function GET(
     );
   }
 }
+
+
+
+
+

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { requireApiAuth, getCurrentUser } from "@/lib/auth";
+
 
 import { prisma } from "@/lib/prisma";
 
@@ -104,9 +106,9 @@ const DEFAULT_ROADMAP = [
   },
 ];
 
-async function getOrCreateRoadmap(role: string) {
+async function getOrCreateRoadmap(userId: string, role: string) {
   let roadmap = await prisma.careerRoadmap.findFirst({
-    where: { role },
+    where: { userId, role },
     include: {
       items: {
         orderBy: {
@@ -122,6 +124,7 @@ async function getOrCreateRoadmap(role: string) {
 
   roadmap = await prisma.careerRoadmap.create({
     data: {
+      userId,
       role,
       items: {
         create: DEFAULT_ROADMAP.map((item) => ({
@@ -145,9 +148,22 @@ async function getOrCreateRoadmap(role: string) {
 }
 
 export async function GET() {
+  const authError = await requireApiAuth();
+  if (authError) {
+    return authError;
+  }
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Authentication required." },
+      { status: 401 }
+    );
+  }
+
   try {
     const roadmap =
       await getOrCreateRoadmap(
+        user.id,
         "software-engineer"
       );
 
@@ -183,17 +199,11 @@ export async function GET() {
       items: roadmap.items,
     });
   } catch (error) {
-    console.error(
-      "Career progress GET error:",
-      error
-    );
+    logger.error("Career progress GET error", { error });
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to load roadmap progress.",
+        error: "Unable to load roadmap progress.",
       },
       {
         status: 500,
@@ -205,6 +215,18 @@ export async function GET() {
 export async function PATCH(
   request: Request
 ) {
+  const authError = await requireApiAuth();
+  if (authError) {
+    return authError;
+  }
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Authentication required." },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await request.json();
 
@@ -226,10 +248,13 @@ export async function PATCH(
     }
 
     const item =
-      await prisma.careerRoadmapItem.findUnique(
+      await prisma.careerRoadmapItem.findFirst(
         {
           where: {
             id: itemId,
+            roadmap: {
+              userId: user.id,
+            },
           },
         }
       );
@@ -267,6 +292,9 @@ export async function PATCH(
         {
           where: {
             id: itemId,
+            roadmap: {
+              userId: user.id,
+            },
           },
           data: {
             progress: nextProgress,
@@ -280,17 +308,11 @@ export async function PATCH(
       item: updated,
     });
   } catch (error) {
-    console.error(
-      "Career progress PATCH error:",
-      error
-    );
+    logger.error("Career progress PATCH error", { error });
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to update roadmap progress.",
+        error: "Unable to update roadmap progress.",
       },
       {
         status: 500,
@@ -298,3 +320,8 @@ export async function PATCH(
     );
   }
 }
+
+
+
+
+

@@ -8,10 +8,9 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import {
-  getGitHubStats,
-  getGitHubActivity,
-} from "@/lib/github";
+import { getGitHubStats, getGitHubActivity } from "@/lib/github";
+import { requireCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 import { calculateCareerReadiness } from "@/lib/career-readiness";
 
@@ -27,16 +26,50 @@ import {
 import ProjectHealthCard from "@/components/dashboard/project-health";
 export const dynamic = "force-dynamic";
 export default async function GithubPage() {
-  const github = await getGitHubStats();
+  const user = await requireCurrentUser();
 
-const activity = await getGitHubActivity(
-  github.profile.login
-);
+  const githubAccount = await prisma.gitHubAccount.findUnique({
+    where: { userId: user.id },
+    select: { login: true },
+  });
+
+  if (!githubAccount) {
+    return (
+      <main className="mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+        <section className="rounded-2xl border border-border/60 bg-card/70 p-8 text-center shadow-sm backdrop-blur-xl">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <GitBranch className="h-7 w-7" />
+          </div>
+
+          <h1 className="mt-5 text-2xl font-bold tracking-tight">
+            Connect your GitHub account
+          </h1>
+
+          <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-muted-foreground">
+            Connect GitHub to unlock repository insights, development activity,
+            project health, technology analysis and career readiness.
+          </p>
+
+          <a
+            href="/settings"
+            className="mt-6 inline-flex items-center justify-center rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            Connect GitHub
+          </a>
+        </section>
+      </main>
+    );
+  }
+
+  const github = await getGitHubStats(user.id);
+
+const activity = await getGitHubActivity(user.id);
 
 const analyzedProjects = await Promise.all(
   github.repos.map(async (repo) => {
     const signals =
       await getCachedRepositoryAnalysis(
+        user.id,
         github.profile.login,
         repo.name
       );
@@ -364,3 +397,6 @@ function MetricCard({
     </div>
   );
 }
+
+
+

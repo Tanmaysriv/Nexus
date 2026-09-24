@@ -11,10 +11,11 @@ const cache = new Map<string, CacheEntry>();
 const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
 
 export async function getCachedRepositoryAnalysis(
+  userId: string,
   owner: string,
   repo: string
 ): Promise<RepositorySignals> {
-  const key = `${owner}/${repo}`;
+  const key = `${userId}:${owner}/${repo}`;
 
   const existing = cache.get(key);
 
@@ -26,6 +27,7 @@ export async function getCachedRepositoryAnalysis(
   }
 
   const data = await analyzeRepository(
+    userId,
     owner,
     repo
   );
@@ -38,3 +40,4 @@ export async function getCachedRepositoryAnalysis(
 
   return data;
 }
+

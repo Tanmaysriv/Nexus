@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { getGitHubAccount } from "@/lib/github";
 import type {
   RepositorySignals,
 } from "@/lib/project-health";
@@ -7,10 +8,11 @@ const GITHUB_API =
   "https://api.github.com";
 
 async function githubRequest<T>(
+  userId: string,
   url: string
 ): Promise<T> {
-  const token =
-    process.env.GITHUB_TOKEN;
+  const account =
+    await getGitHubAccount(userId);
 
   const response = await fetch(url, {
     headers: {
@@ -19,12 +21,8 @@ async function githubRequest<T>(
 
       "X-GitHub-Api-Version":
         "2022-11-28",
-
-      ...(token
-        ? {
-            Authorization: `Bearer ${token}`,
-          }
-        : {}),
+      Authorization:
+        `Bearer ${account.accessToken}`,
     },
 
     next: {
@@ -90,6 +88,7 @@ type GitHubTreeResponse = {
  */
 
 async function getRepositoryTree(
+  userId: string,
   owner: string,
   repo: string
 ): Promise<GitHubTreeItem[]> {
@@ -98,12 +97,12 @@ async function getRepositoryTree(
       await githubRequest<{
         default_branch: string;
       }>(
-        `${GITHUB_API}/repos/${owner}/${repo}`
+        userId, `${GITHUB_API}/repos/${owner}/${repo}`
       );
 
     const tree =
       await githubRequest<GitHubTreeResponse>(
-        `${GITHUB_API}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(
+        userId, `${GITHUB_API}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(
           repoInfo.default_branch
         )}?recursive=1`
       );
@@ -137,6 +136,7 @@ async function getRepositoryTree(
  */
 
 async function getPackageJsonAtPath(
+  userId: string,
   owner: string,
   repo: string,
   path: string
@@ -144,7 +144,7 @@ async function getPackageJsonAtPath(
   try {
     const file =
       await githubRequest<GitHubFile>(
-        `${GITHUB_API}/repos/${owner}/${repo}/contents/${path}`
+        userId, `${GITHUB_API}/repos/${owner}/${repo}/contents/${path}`
       );
 
     if (
@@ -752,6 +752,7 @@ function detectTechnologies(
  */
 
 export async function analyzeRepositoryUncached(
+  userId: string,
   owner: string,
   repo: string
 ): Promise<RepositorySignals> {
@@ -763,7 +764,7 @@ export async function analyzeRepositoryUncached(
     await githubRequest<
       GitHubContent[]
     >(
-      `${GITHUB_API}/repos/${owner}/${repo}/contents`
+      userId, `${GITHUB_API}/repos/${owner}/${repo}/contents`
     );
 
   /*
@@ -772,6 +773,7 @@ export async function analyzeRepositoryUncached(
 
   const tree =
     await getRepositoryTree(
+      userId,
       owner,
       repo
     );
@@ -929,6 +931,7 @@ export async function analyzeRepositoryUncached(
       packagePaths.map(
         (path) =>
           getPackageJsonAtPath(
+            userId,
             owner,
             repo,
             path
@@ -1019,10 +1022,12 @@ if (
 const getCachedRepositoryAnalysis =
   unstable_cache(
     async (
+      userId: string,
       owner: string,
       repo: string
     ): Promise<RepositorySignals> => {
       return analyzeRepositoryUncached(
+        userId,
         owner,
         repo
       );
@@ -1035,13 +1040,38 @@ const getCachedRepositoryAnalysis =
   );
 
 export async function analyzeRepository(
+  userId: string,
   owner: string,
   repo: string
 ): Promise<RepositorySignals> {
-  return getCachedRepositoryAnalysis(
-    owner,
-    repo
-  );
+  try {
+    return await getCachedRepositoryAnalysis(
+      userId,
+      owner,
+      repo
+    );
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.startsWith("GitHub API 404")
+    ) {
+      logger.warn("Repository unavailable", { owner, repo });
+
+      return {
+        hasReadme: false,
+        hasPackageJson: false,
+        hasTests: false,
+        hasDocker: false,
+        hasCI: false,
+        hasTypeScript: false,
+        hasEnvironmentExample: false,
+        hasLicense: false,
+        technologies: [],
+      };
+    }
+
+    throw error;
+  }
 }
 
 /*
@@ -1059,6 +1089,7 @@ export async function analyzeRepository(
 const getCachedRepositoryAnalyses =
   unstable_cache(
     async (
+      userId: string,
       owner: string,
       repositories: string[]
     ): Promise<
@@ -1071,6 +1102,7 @@ const getCachedRepositoryAnalyses =
               try {
                 const signals =
                   await analyzeRepositoryUncached(
+                    userId,
                     owner,
                     repo
                   );
@@ -1080,10 +1112,7 @@ const getCachedRepositoryAnalyses =
                   signals,
                 ] as const;
               } catch (error) {
-                console.warn(
-                  `Unable to analyze repository ${repo}:`,
-                  error
-                );
+                logger.warn("Unable to analyze repository", { repo, error });
 
                 return null;
               }
@@ -1110,6 +1139,7 @@ const getCachedRepositoryAnalyses =
   );
 
 export async function analyzeRepositories(
+  userId: string,
   owner: string,
   repositories: string[]
 ): Promise<
@@ -1121,7 +1151,17 @@ export async function analyzeRepositories(
     ).sort();
 
   return getCachedRepositoryAnalyses(
+    userId,
     owner,
     uniqueRepositories
   );
 }
+
+
+
+
+
+
+
+
+

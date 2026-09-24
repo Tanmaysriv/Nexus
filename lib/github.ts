@@ -1,5 +1,8 @@
 import { unstable_cache } from "next/cache";
 
+import { prisma } from "@/lib/prisma";
+import { decryptGitHubToken } from "@/lib/github-crypto";
+
 const GITHUB_API = "https://api.github.com";
 
 export type GitHubRepo = {
@@ -38,50 +41,64 @@ export type GitHubActivity = {
   dailyActivity: GitHubActivityDay[];
 };
 
-/**
- * Generic GitHub API fetcher.
- *
- * Authentication is read at request time so the token
- * supplied by Next.js from .env.local is always used.
- */
-async function githubFetch<T>(url: string): Promise<T> {
-  const token = process.env.GITHUB_TOKEN?.trim();
+type GitHubAccountData = {
+  login: string;
+  accessToken: string;
+};
 
-  console.log("=== GITHUB DEBUG ===");
-  console.log("Username:", process.env.GITHUB_USERNAME);
-  console.log("Has token:", Boolean(token));
-  console.log("Token length:", token?.length);
-  console.log("Token prefix:", token?.slice(0, 10));
-  console.log("URL:", url);
+export async function hasGitHubAccount(userId: string) {
+  const account = await prisma.gitHubAccount.findUnique({
+    where: {
+      userId,
+    },
+    select: {
+      id: true,
+    },
+  });
 
+  return Boolean(account);
+}
+export async function getGitHubAccount(
+  userId: string
+): Promise<GitHubAccountData> {
+  const account = await prisma.gitHubAccount.findUnique({
+    where: {
+      userId,
+    },
+    select: {
+      login: true,
+      accessToken: true,
+    },
+  });
+
+  if (!account) {
+    throw new Error(
+      "GitHub account is not connected."
+    );
+  }
+
+  return {
+    login: account.login,
+    accessToken: decryptGitHubToken(
+      account.accessToken
+    ),
+  };
+}
+
+async function githubFetch<T>(
+  url: string,
+  accessToken: string
+): Promise<T> {
   const headers: HeadersInit = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
+    Authorization: `Bearer ${accessToken}`,
   };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  console.log(
-    "Authorization header created:",
-    Boolean(headers.Authorization)
-  );
 
   const response = await fetch(url, {
     headers,
     cache: "no-store",
   });
-
-  console.log("GitHub response:", response.status);
-  console.log(
-    "GitHub remaining:",
-    response.headers.get("x-ratelimit-remaining")
-  );
-  console.log(
-    "GitHub limit:",
-    response.headers.get("x-ratelimit-limit")
-  );
 
   if (!response.ok) {
     const errorBody = await response.text();
@@ -94,167 +111,186 @@ async function githubFetch<T>(url: string): Promise<T> {
   return response.json();
 }
 
-/**
- * Cached GitHub profile.
- *
- * Revalidated once every hour.
- */
-const getCachedGitHubProfile = unstable_cache(
-  async (): Promise<GitHubProfile> => {
-    const username = process.env.GITHUB_USERNAME;
-
-    if (!username) {
-      throw new Error(
-        "GITHUB_USERNAME is not configured."
-      );
-    }
-
-    return githubFetch<GitHubProfile>(
-      `${GITHUB_API}/users/${username}`
-    );
-  },
-  ["github-profile"],
-  {
-    revalidate: 3600,
-  }
-);
-
-/**
- * Cached GitHub repositories.
- *
- * Revalidated once every hour.
- */
-const getCachedGitHubRepos = unstable_cache(
-  async (): Promise<GitHubRepo[]> => {
-    const username = process.env.GITHUB_USERNAME;
-
-    if (!username) {
-      throw new Error(
-        "GITHUB_USERNAME is not configured."
-      );
-    }
-
-    return githubFetch<GitHubRepo[]>(
-      `${GITHUB_API}/users/${username}/repos?sort=updated&per_page=100`
-    );
-  },
-  ["github-repositories"],
-  {
-    revalidate: 3600,
-  }
-);
-
-/**
- * Cached GitHub activity.
- *
- * Revalidated once every hour.
- */
-const getCachedGitHubActivity = unstable_cache(
-  async (
-    username: string
-  ): Promise<GitHubActivity> => {
-    type GitHubEvent = {
-  created_at?: string;
-};
-
-const events = await githubFetch<GitHubEvent[]>(
-      `${GITHUB_API}/users/${username}/events/public?per_page=100`
-    );
-
-    const activityMap = new Map<string, number>();
-
-    for (const event of events) {
-      if (!event.created_at) {
-        continue;
-      }
-
-      const date = new Date(event.created_at)
-        .toISOString()
-        .split("T")[0];
-
-      activityMap.set(
-        date,
-        (activityMap.get(date) ?? 0) + 1
-      );
-    }
-
-    const dailyActivity: GitHubActivityDay[] = [];
-
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date();
-
-      date.setDate(
-        date.getDate() - i
-      );
-
-      const dateString = date
-        .toISOString()
-        .split("T")[0];
-
-      dailyActivity.push({
-        date: dateString,
-        count:
-          activityMap.get(dateString) ?? 0,
-      });
-    }
-
-    const activeDays =
-      dailyActivity.filter(
-        (day) => day.count > 0
-      ).length;
-
-    let longestStreak = 0;
-    let currentStreak = 0;
-
-    for (const day of dailyActivity) {
-      if (day.count > 0) {
-        currentStreak++;
-
-        longestStreak = Math.max(
-          longestStreak,
-          currentStreak
-        );
-      } else {
-        currentStreak = 0;
-      }
-    }
-
-    return {
-      totalEvents: events.length,
-      activeDays,
-      longestStreak,
-      dailyActivity,
-    };
-  },
-  ["github-activity"],
-  {
-    revalidate: 3600,
-  }
-);
-
-/**
- * Public GitHub profile getter.
- */
-export async function getGitHubProfile(): Promise<GitHubProfile> {
-  return getCachedGitHubProfile();
+async function fetchGitHubProfile(
+  userId: string,
+  accessToken: string
+): Promise<GitHubProfile> {
+  return githubFetch<GitHubProfile>(
+    `${GITHUB_API}/user`,
+    accessToken
+  );
 }
 
-/**
- * Public GitHub repositories getter.
- */
-export async function getGitHubRepos(): Promise<GitHubRepo[]> {
-  return getCachedGitHubRepos();
+async function fetchGitHubRepos(
+  userId: string,
+  accessToken: string
+): Promise<GitHubRepo[]> {
+  return githubFetch<GitHubRepo[]>(
+    `${GITHUB_API}/user/repos?sort=updated&per_page=100&affiliation=owner,collaborator,organization_member`,
+    accessToken
+  );
 }
 
-/**
- * Calculates GitHub portfolio statistics
- * from cached profile and repository data.
- */
-export async function getGitHubStats() {
+async function fetchGitHubActivity(
+  username: string,
+  accessToken: string
+): Promise<GitHubActivity> {
+  type GitHubEvent = {
+    created_at?: string;
+  };
+
+  const events = await githubFetch<GitHubEvent[]>(
+    `${GITHUB_API}/users/${encodeURIComponent(
+      username
+    )}/events/public?per_page=100`,
+    accessToken
+  );
+
+  const activityMap = new Map<string, number>();
+
+  for (const event of events) {
+    if (!event.created_at) {
+      continue;
+    }
+
+    const date = new Date(event.created_at)
+      .toISOString()
+      .split("T")[0];
+
+    activityMap.set(
+      date,
+      (activityMap.get(date) ?? 0) + 1
+    );
+  }
+
+  const dailyActivity: GitHubActivityDay[] = [];
+
+  for (let i = 29; i >= 0; i--) {
+    const date = new Date();
+
+    date.setDate(date.getDate() - i);
+
+    const dateString = date
+      .toISOString()
+      .split("T")[0];
+
+    dailyActivity.push({
+      date: dateString,
+      count:
+        activityMap.get(dateString) ?? 0,
+    });
+  }
+
+  const activeDays =
+    dailyActivity.filter(
+      (day) => day.count > 0
+    ).length;
+
+  let longestStreak = 0;
+  let currentStreak = 0;
+
+  for (const day of dailyActivity) {
+    if (day.count > 0) {
+      currentStreak++;
+
+      longestStreak = Math.max(
+        longestStreak,
+        currentStreak
+      );
+    } else {
+      currentStreak = 0;
+    }
+  }
+
+  return {
+    totalEvents: events.length,
+    activeDays,
+    longestStreak,
+    dailyActivity,
+  };
+}
+
+function cachedProfile(
+  userId: string,
+  accessToken: string
+) {
+  return unstable_cache(
+    () =>
+      fetchGitHubProfile(
+        userId,
+        accessToken
+      ),
+    ["github-profile", userId],
+    {
+      revalidate: 3600,
+    }
+  )();
+}
+
+function cachedRepos(
+  userId: string,
+  accessToken: string
+) {
+  return unstable_cache(
+    () =>
+      fetchGitHubRepos(
+        userId,
+        accessToken
+      ),
+    ["github-repositories", userId],
+    {
+      revalidate: 3600,
+    }
+  )();
+}
+
+function cachedActivity(
+  userId: string,
+  username: string,
+  accessToken: string
+) {
+  return unstable_cache(
+    () =>
+      fetchGitHubActivity(
+        username,
+        accessToken
+      ),
+    ["github-activity", userId],
+    {
+      revalidate: 3600,
+    }
+  )();
+}
+
+export async function getGitHubProfile(
+  userId: string
+): Promise<GitHubProfile> {
+  const account = await getGitHubAccount(userId);
+
+  return cachedProfile(
+    userId,
+    account.accessToken
+  );
+}
+
+export async function getGitHubRepos(
+  userId: string
+): Promise<GitHubRepo[]> {
+  const account = await getGitHubAccount(userId);
+
+  return cachedRepos(
+    userId,
+    account.accessToken
+  );
+}
+
+export async function getGitHubStats(
+  userId: string
+) {
   const [profile, repos] =
     await Promise.all([
-      getGitHubProfile(),
-      getGitHubRepos(),
+      getGitHubProfile(userId),
+      getGitHubRepos(userId),
     ]);
 
   const activeRepos = repos.filter(
@@ -317,13 +353,16 @@ export async function getGitHubStats() {
   };
 }
 
-/**
- * Public GitHub activity getter.
- */
 export async function getGitHubActivity(
-  username: string
+  userId: string
 ): Promise<GitHubActivity> {
-  return getCachedGitHubActivity(
-    username
+  const account = await getGitHubAccount(userId);
+
+  return cachedActivity(
+    userId,
+    account.login,
+    account.accessToken
   );
 }
+
+

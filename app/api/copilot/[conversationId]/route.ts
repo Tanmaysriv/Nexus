@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { requireApiAuth, getCurrentUser } from "@/lib/auth";
+
 
 import { prisma } from "@/lib/prisma";
 
@@ -12,6 +14,18 @@ export async function GET(
   request: Request,
   context: RouteContext
 ) {
+  const authError = await requireApiAuth();
+  if (authError) {
+    return authError;
+  }
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Authentication required." },
+      { status: 401 }
+    );
+  }
+
   try {
     const { conversationId } =
       await context.params;
@@ -20,6 +34,7 @@ export async function GET(
       await prisma.copilotConversation.findUnique({
         where: {
           id: conversationId,
+          userId: user.id,
         },
         include: {
           messages: {
@@ -55,17 +70,11 @@ export async function GET(
         conversation.messages,
     });
   } catch (error) {
-    console.error(
-      "Copilot conversation error:",
-      error
-    );
+    logger.error("Copilot conversation error", { error });
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to load conversation.",
+        error: "Unable to load conversation.",
       },
       {
         status: 500,
@@ -78,13 +87,47 @@ export async function DELETE(
   request: Request,
   context: RouteContext
 ) {
+  const authError = await requireApiAuth();
+  if (authError) {
+    return authError;
+  }
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Authentication required." },
+      { status: 401 }
+    );
+  }
+
   try {
     const { conversationId } =
       await context.params;
 
+    const conversation =
+      await prisma.copilotConversation.findUnique({
+        where: {
+          id: conversationId,
+          userId: user.id,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    if (!conversation) {
+      return NextResponse.json(
+        {
+          error: "Conversation not found.",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
     await prisma.copilotConversation.delete({
       where: {
-        id: conversationId,
+        id: conversation.id,
       },
     });
 
@@ -92,17 +135,11 @@ export async function DELETE(
       success: true,
     });
   } catch (error) {
-    console.error(
-      "Delete Copilot conversation error:",
-      error
-    );
+    logger.error("Delete Copilot conversation error", { error });
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to delete conversation.",
+        error: "Unable to delete conversation.",
       },
       {
         status: 500,
@@ -110,3 +147,9 @@ export async function DELETE(
     );
   }
 }
+
+
+
+
+
+

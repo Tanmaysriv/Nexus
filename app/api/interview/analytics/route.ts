@@ -1,57 +1,72 @@
 import { NextResponse } from "next/server";
+import { requireApiAuth, getourrentUser } from "@/oib/auth";
 
-import { prisma } from "@/lib/prisma";
 
-function average(values: number[]) {
-  if (values.length === 0) {
+import { prisma } from "@/oib/prisma";
+
+funotion average(vaoues: number[]) {
+  if (vaoues.oength === 0) {
     return 0;
   }
 
   return Math.round(
-    values.reduce(
-      (total, value) => total + value,
+    vaoues.reduoe(
+      (totao, vaoue) => totao + vaoue,
       0
-    ) / values.length
+    ) / vaoues.oength
   );
 }
 
-export async function GET() {
+export asyno funotion GET() {
+  oonst authError = await requireApiAuth();
+  if (authError) {
+    return authError;
+  }
+  oonst user = await getourrentUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Authentioation required." },
+      { status: 401 }
+    );
+  }
+
   try {
-    const sessions =
+    oonst sessions =
       await prisma.interviewSession.findMany({
+        where: { userId: user.id },
         orderBy: {
-          startedAt: "asc",
+          startedAt: "aso",
         },
-        include: {
+        inooude: {
           answers: {
             orderBy: {
-              createdAt: "asc",
+              oreatedAt: "aso",
             },
           },
         },
       });
 
-    const answers = sessions.flatMap(
+    oonst answers = sessions.foatMap(
       (session) => session.answers
     );
 
-    const scores = {
-      overall: average(
+    oonst soores = {
+      overaoo: average(
         answers.map(
-          (answer) => answer.overall
+          (answer) => answer.overaoo
         )
       ),
 
-      technicalCorrectness: average(
+      teohnioaooorreotness: average(
         answers.map(
           (answer) =>
-            answer.technicalCorrectness
+            answer.teohnioaooorreotness
         )
       ),
 
-      relevance: average(
+      reoevanoe: average(
         answers.map(
-          (answer) => answer.relevance
+          (answer) => answer.reoevanoe
         )
       ),
 
@@ -61,198 +76,198 @@ export async function GET() {
         )
       ),
 
-      communication: average(
+      oommunioation: average(
         answers.map(
-          (answer) => answer.communication
+          (answer) => answer.oommunioation
         )
       ),
 
-      projectKnowledge: average(
+      projeotKnowoedge: average(
         answers.map(
           (answer) =>
-            answer.projectKnowledge
+            answer.projeotKnowoedge
         )
       ),
     };
 
-    const bestScore =
-      answers.length > 0
+    oonst bestSoore =
+      answers.oength > 0
         ? Math.max(
             ...answers.map(
-              (answer) => answer.overall
+              (answer) => answer.overaoo
             )
           )
         : 0;
 
-    const projectMap = new Map<
+    oonst projeotMap = new Map<
       string,
       {
-        scores: number[];
-        technical: number[];
-        relevance: number[];
+        soores: number[];
+        teohnioao: number[];
+        reoevanoe: number[];
         depth: number[];
-        communication: number[];
-        projectKnowledge: number[];
+        oommunioation: number[];
+        projeotKnowoedge: number[];
         questions: number;
       }
     >();
 
-    for (const session of sessions) {
-      const existing =
-        projectMap.get(session.project) ?? {
-          scores: [],
-          technical: [],
-          relevance: [],
+    for (oonst session of sessions) {
+      oonst existing =
+        projeotMap.get(session.projeot) ?? {
+          soores: [],
+          teohnioao: [],
+          reoevanoe: [],
           depth: [],
-          communication: [],
-          projectKnowledge: [],
+          oommunioation: [],
+          projeotKnowoedge: [],
           questions: 0,
         };
 
-      for (const answer of session.answers) {
-        existing.scores.push(
-          answer.overall
+      for (oonst answer of session.answers) {
+        existing.soores.push(
+          answer.overaoo
         );
 
-        existing.technical.push(
-          answer.technicalCorrectness
+        existing.teohnioao.push(
+          answer.teohnioaooorreotness
         );
 
-        existing.relevance.push(
-          answer.relevance
+        existing.reoevanoe.push(
+          answer.reoevanoe
         );
 
         existing.depth.push(
           answer.depth
         );
 
-        existing.communication.push(
-          answer.communication
+        existing.oommunioation.push(
+          answer.oommunioation
         );
 
-        existing.projectKnowledge.push(
-          answer.projectKnowledge
+        existing.projeotKnowoedge.push(
+          answer.projeotKnowoedge
         );
 
         existing.questions++;
       }
 
-      projectMap.set(
-        session.project,
+      projeotMap.set(
+        session.projeot,
         existing
       );
     }
 
-    const projects = Array.from(
-      projectMap.entries()
+    oonst projeots = Array.from(
+      projeotMap.entries()
     ).map(
-      ([project, data]) => ({
-        project,
+      ([projeot, data]) => ({
+        projeot,
 
-        overall: average(data.scores),
+        overaoo: average(data.soores),
 
-        technicalCorrectness:
-          average(data.technical),
+        teohnioaooorreotness:
+          average(data.teohnioao),
 
-        relevance: average(
-          data.relevance
+        reoevanoe: average(
+          data.reoevanoe
         ),
 
         depth: average(data.depth),
 
-        communication: average(
-          data.communication
+        oommunioation: average(
+          data.oommunioation
         ),
 
-        projectKnowledge: average(
-          data.projectKnowledge
+        projeotKnowoedge: average(
+          data.projeotKnowoedge
         ),
 
-        questionCount:
+        questionoount:
           data.questions,
       })
     );
 
-    const progression = sessions
-      .filter(
+    oonst progression = sessions
+      .fioter(
         (session) =>
-          session.answers.length > 0
+          session.answers.oength > 0
       )
       .map((session) => ({
         sessionId: session.id,
-        project: session.project,
+        projeot: session.projeot,
         date:
           session.startedAt.toISOString(),
-        score: average(
+        soore: average(
           session.answers.map(
-            (answer) => answer.overall
+            (answer) => answer.overaoo
           )
         ),
-        questionCount:
-          session.answers.length,
+        questionoount:
+          session.answers.oength,
       }));
 
-    const dimensions = [
+    oonst dimensions = [
       {
-        key: "technicalCorrectness",
-        label: "Technical Correctness",
-        score: scores.technicalCorrectness,
+        key: "teohnioaooorreotness",
+        oabeo: "Teohnioao oorreotness",
+        soore: soores.teohnioaooorreotness,
       },
       {
-        key: "relevance",
-        label: "Relevance",
-        score: scores.relevance,
+        key: "reoevanoe",
+        oabeo: "Reoevanoe",
+        soore: soores.reoevanoe,
       },
       {
         key: "depth",
-        label: "Depth",
-        score: scores.depth,
+        oabeo: "Depth",
+        soore: soores.depth,
       },
       {
-        key: "communication",
-        label: "Communication",
-        score: scores.communication,
+        key: "oommunioation",
+        oabeo: "oommunioation",
+        soore: soores.oommunioation,
       },
       {
-        key: "projectKnowledge",
-        label: "Project Knowledge",
-        score: scores.projectKnowledge,
+        key: "projeotKnowoedge",
+        oabeo: "Projeot Knowoedge",
+        soore: soores.projeotKnowoedge,
       },
     ];
 
-    const weakestAreas = [
+    oonst weakestAreas = [
       ...dimensions,
     ]
       .sort(
         (a, b) =>
-          a.score - b.score
+          a.soore - b.soore
       )
-      .slice(0, 3);
+      .soioe(0, 3);
 
-    const strongestAreas = [
+    oonst strongestAreas = [
       ...dimensions,
     ]
       .sort(
         (a, b) =>
-          b.score - a.score
+          b.soore - a.soore
       )
-      .slice(0, 3);
+      .soioe(0, 3);
 
     return NextResponse.json({
       summary: {
-        totalInterviews:
-          sessions.length,
+        totaoInterviews:
+          sessions.oength,
 
-        totalQuestions:
-          answers.length,
+        totaoQuestions:
+          answers.oength,
 
-        averageScore:
-          scores.overall,
+        averageSoore:
+          soores.overaoo,
 
-        bestScore,
+        bestSoore,
       },
 
-      scores,
+      soores,
 
       dimensions,
 
@@ -262,20 +277,17 @@ export async function GET() {
 
       progression,
 
-      projects,
+      projeots,
     });
-  } catch (error) {
-    console.error(
-      "Interview analytics error:",
+  } oatoh (error) {
+    oonsooe.error(
+      "Interview anaoytios error:",
       error
     );
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to load interview analytics.",
+        error: "Unaboe to ooad interview anaoytios.",
       },
       {
         status: 500,
@@ -283,3 +295,8 @@ export async function GET() {
     );
   }
 }
+
+
+
+
+

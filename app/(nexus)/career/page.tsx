@@ -1,4 +1,6 @@
+import { cookies } from "next/headers";
 import CareerProgress from "./career-progress";
+import CareerAgent from "@/components/career/career-agent";
 import ActionCenter from "./action-center";
 import Link from "next/link";
 import {
@@ -127,8 +129,16 @@ const APP_URL =
   "http://127.0.0.1:3000";
 
 async function apiFetch<T>(path: string): Promise<T> {
+  const cookieStore = await cookies();
+  const session = cookieStore.get("nexus_session")?.value;
+
   const response = await fetch(`${APP_URL}${path}`, {
     cache: "no-store",
+    headers: session
+      ? {
+          Cookie: `nexus_session=${session}`,
+        }
+      : undefined,
   });
 
   if (!response.ok) {
@@ -562,6 +572,7 @@ export default async function CareerPage() {
         </div>
       </section>
       <ActionCenter />
+      <CareerAgent />
 
       {/* Interview + Career signal */}
 
@@ -1037,3 +1048,6 @@ export default async function CareerPage() {
     </main>
   );
 }
+
+
+

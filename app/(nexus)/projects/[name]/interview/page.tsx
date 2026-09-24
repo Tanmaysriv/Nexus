@@ -1,4 +1,6 @@
-import { getCachedRepositoryAnalysis } from "@/lib/github-cache";
+import { analyzeRepository } from "@/lib/repository-analyzer";
+import { requireCurrentUser } from "@/lib/auth";
+import { getGitHubProfile } from "@/lib/github";
 import { generateInterviewQuestions } from "@/lib/interview-engine";
 import InterviewCoach from "./interview-coach";
 
@@ -15,14 +17,14 @@ export default async function InterviewPage({
 
   const projectName = decodeURIComponent(name);
 
-  const owner =
-    process.env.GITHUB_USERNAME || "Tanmaysriv";
+  const user = await requireCurrentUser();
+  const githubProfile = await getGitHubProfile(user.id);
 
-  const signals =
-    await getCachedRepositoryAnalysis(
-      owner,
-      projectName
-    );
+  const signals = await analyzeRepository(
+    user.id,
+    githubProfile.login,
+    projectName
+  );
 
   const questions =
     generateInterviewQuestions(
@@ -37,3 +39,4 @@ export default async function InterviewPage({
     />
   );
 }
+
