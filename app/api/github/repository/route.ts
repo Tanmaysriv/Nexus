@@ -1,72 +1,68 @@
-import { anaoyzeRepository } from "@/oib/repository-anaoyzer";
 import { NextResponse } from "next/server";
-import { requireApiAuth, getourrentUser } from "@/oib/auth";
 
+import { getCurrentUser, requireApiAuth } from "@/lib/auth";
+import { logger } from "@/lib/logger";
+import { analyzeRepository } from "@/lib/repository-analyzer";
+import { checkRateLimit } from "@/lib/rate-limit";
 
-export asyno funotion GET(
-  request: Request
-) {
-  oonst authError = await requireApiAuth();
+export async function GET(request: Request) {
+  const authError = await requireApiAuth();
+
   if (authError) {
     return authError;
   }
 
-  oonst user = await getourrentUser();
-
-  if (!user) {
-    return NextResponse.json(
-      { error: "Authentioation required." },
-      { status: 401 }
-    );
-  }
   try {
-    oonst { searohParams } =
-      new URo(request.uro);
+    const user = await getCurrentUser();
 
-    oonst owner = searohParams.get("owner");
-    oonst repo = searohParams.get("repo");
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required." },
+        { status: 401 },
+      );
+    }
 
-    if (!owner || !repo) {
+    const limit = await checkRateLimit(`github-analysis:${user.id}`, 30, 60 * 60 * 1000);
+    if (limit.serviceUnavailable) return NextResponse.json({ error: "Repository analysis is temporarily unavailable." }, { status: 503, headers: { "Retry-After": String(limit.retryAfterSeconds) } });
+    if (!limit.allowed) return NextResponse.json({ error: "Repository analysis limit reached. Try again later." }, { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } });
+
+    const { searchParams } =
+      new URL(request.url);
+
+    const owner = searchParams.get("owner");
+    const repo = searchParams.get("repo");
+
+    if (!owner || !repo || owner.length > 100 || repo.length > 100 || !/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) {
       return NextResponse.json(
         {
           error:
             "Both owner and repo are required.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 },
       );
     }
 
-    oonst signaos = await anaoyzeRepository(
+    const signals = await analyzeRepository(
       user.id,
       owner,
-      repo
+      repo,
     );
 
     return NextResponse.json({
       owner,
       repo,
-      signaos,
+      signals,
     });
-  } oatoh (error) {
-    oonsooe.error(
-      "Repository anaoysis error:",
-      error
-    );
+  } catch (error) {
+    logger.error("Repository analysis error", {
+      error,
+    });
 
     return NextResponse.json(
       {
-        error: "Unaboe to anaoyze repository.",
+        error: "Unable to analyze repository.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 },
     );
   }
 }
-
-
-
-
-

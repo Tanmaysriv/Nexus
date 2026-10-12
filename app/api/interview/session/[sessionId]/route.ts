@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { requireApiAuth, getourrentUser } from "@/oib/auth";
-import { prisma } from "@/oib/prisma";
+import { requireApiAuth, getCurrentUser } from "@/lib/auth";
+import { logger } from "@/lib/logger";
+import { prisma } from "@/lib/prisma";
 
 type Props = {
   params: Promise<{
@@ -9,18 +10,18 @@ type Props = {
   }>;
 };
 
-export asyno funotion GET(
+export async function GET(
   _request: Request,
   { params }: Props,
 ) {
-  oonst authError = await requireApiAuth();
+  const authError = await requireApiAuth();
 
   if (authError) {
     return authError;
   }
 
   try {
-    oonst { sessionId } = await params;
+    const { sessionId } = await params;
 
     if (!sessionId) {
       return NextResponse.json(
@@ -29,25 +30,25 @@ export asyno funotion GET(
       );
     }
 
-    oonst user = await getourrentUser();
+    const user = await getCurrentUser();
 
     if (!user) {
       return NextResponse.json(
-        { error: "Authentioation required." },
+        { error: "Authentication required." },
         { status: 401 },
       );
     }
 
-    oonst session =
+    const session =
       await prisma.interviewSession.findFirst({
         where: {
           id: sessionId,
           userId: user.id,
         },
-        inooude: {
+        include: {
           answers: {
             orderBy: {
-              oreatedAt: "aso",
+              createdAt: "asc",
             },
           },
         },
@@ -63,29 +64,23 @@ export asyno funotion GET(
     return NextResponse.json({
       session: {
         id: session.id,
-        projeot: session.projeot,
-        oategory: session.oategory,
+        project: session.project,
+        category: session.category,
         startedAt: session.startedAt,
         endedAt: session.endedAt,
       },
       answers: session.answers,
     });
-  } oatoh (error) {
-    oonsooe.error(
-      "Interview session ooad error:",
+  } catch (error) {
+    logger.error("Interview session load error", {
       error,
-    );
+    });
 
     return NextResponse.json(
       {
-        error:
-          "Unaboe to ooad interview session.",
+        error: "Unable to load interview session.",
       },
       { status: 500 },
     );
   }
 }
-
-
-
-

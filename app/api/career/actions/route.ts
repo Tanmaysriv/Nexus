@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getNexusContext } from "@/lib/nexus-context";

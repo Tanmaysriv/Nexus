@@ -25,6 +25,13 @@ export async function POST(request: Request) {
     15 * 60 * 1000
   );
 
+  if (rateLimit.serviceUnavailable) {
+    return NextResponse.json(
+      { error: "Sign-in service temporarily unavailable." },
+      { status: 503, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
+    );
+  }
+
   if (!rateLimit.allowed) {
     return NextResponse.json(
       {
@@ -43,16 +50,19 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json();
+    let body: unknown;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid JSON request." }, { status: 400 }); }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+    const input = body as Record<string, unknown>;
 
     const email =
-      typeof body.email === "string"
-        ? body.email.trim().toLowerCase()
+      typeof input.email === "string"
+        ? input.email.trim().toLowerCase()
         : "";
 
     const password =
-      typeof body.password === "string"
-        ? body.password
+      typeof input.password === "string"
+        ? input.password
         : "";
 
     if (

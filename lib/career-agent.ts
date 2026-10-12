@@ -278,12 +278,11 @@ You must:
 4. Be honest about weak or missing evidence.
 5. Never invent skills, projects, scores, technologies,
    achievements, or experience.
-6. Do not discuss resumes.
-7. Select recommendations ONLY from the supplied action
+6. Select recommendations ONLY from the supplied action
    candidates.
-8. Do not create new action IDs.
-9. Explain why the action should happen NOW.
-10. Keep the response practical.
+7. Do not create new action IDs.
+8. Explain why the action should happen NOW.
+9. Keep the response practical.
 
 NEXUS CONTEXT:
 ${JSON.stringify(context, null, 2)}

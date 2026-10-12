@@ -31,6 +31,72 @@ type Action = {
 
 type ApiObject = Record<string, unknown>;
 
+type ResumeDashboardData = {
+  resume: { fileName: string; score: number | null } | null;
+};
+type DailyPlanItem = {
+  id: string;
+  type: "interview" | "dsa" | "learning" | "application" | "action" | "roadmap";
+  title: string;
+  description: string;
+  priority: "high" | "medium" | "low";
+  href: string;
+};
+
+type DailyPlanData = {
+  plan: DailyPlanItem[];
+  generatedAt: string;
+};
+type SkillGapDashboardData = {
+  analyses: { targetRole: string; results: { skills: { skill: string; gap: string; priority: string }[] } }[];
+};
+
+type ApplicationsDashboardData = {
+  applications: {
+    id: string;
+    company: string;
+    role: string;
+    status: string;
+    interviewAt: string | null;
+  }[];
+  stats: {
+    total: number;
+    active: number;
+    interviews: number;
+    offers: number;
+    upcomingInterviews: number;
+    byStatus: Record<string, number>;
+  };
+};
+
+type LearningDashboardData = {
+  progress: {
+    skill: string;
+    status: string;
+  }[];
+};
+
+type DsaDashboardData = {
+  entries: {
+    id: string;
+    topic: string;
+    problem: string;
+    isSolved: boolean;
+    accuracy: number;
+  }[];
+  stats: {
+    total: number;
+    solved: number;
+    averageAccuracy: number | null;
+    totalAttempts: number;
+    weakTopics: {
+      topic: string;
+      accuracy: number;
+      solved: number;
+    }[];
+    practiceDaysLast30: number;
+  };
+};
 type DashboardData = {
   readiness: ApiObject | null;
   jobMatch: ApiObject | null;
@@ -38,6 +104,12 @@ type DashboardData = {
   progress: ApiObject | null;
   actions: Action[];
   github: ApiObject | null;
+  resume: ResumeDashboardData | null;
+  skillGaps: SkillGapDashboardData | null;
+  dailyPlan: DailyPlanData | null;
+  applications: ApplicationsDashboardData | null;
+  learning: LearningDashboardData | null;
+  dsa: DsaDashboardData | null;
 };
 
 const priorityRank: Record<string, number> = {
@@ -127,6 +199,12 @@ export default function DashboardPage() {
     progress: null,
     actions: [],
     github: null,
+    resume: null,
+    skillGaps: null,
+    dailyPlan: null,
+    applications: null,
+    learning: null,
+    dsa: null,
   });
 
   const [loading, setLoading] = useState(true);
@@ -144,6 +222,12 @@ export default function DashboardPage() {
         "/api/career/progress",
         "/api/career/actions",
         "/api/github",
+        "/api/resume",
+        "/api/skill-gap",
+        "/api/career/daily-plan",
+        "/api/applications",
+        "/api/learning",
+        "/api/dsa",
       ];
 
       const responses = await Promise.all(
@@ -176,6 +260,12 @@ export default function DashboardPage() {
         progress: responses[3],
         actions: responses[4]?.actions ?? [],
         github: responses[5],
+        resume: responses[6],
+        skillGaps: responses[7],
+        dailyPlan: responses[8],
+        applications: responses[9],
+        learning: responses[10],
+        dsa: responses[11],
       });
     } catch (err) {
       console.error(err);
@@ -192,12 +282,8 @@ export default function DashboardPage() {
 }, []);
 
 const readinessScore = useMemo(() => {
-  return clamp(
-    getNumber(
-      getObject(data.readiness, "readiness"),
-      ["score"],
-    ),
-  );
+  const value = getObject(data.readiness, "readiness")?.score;
+  return typeof value === "number" && Number.isFinite(value) ? clamp(value) : null;
 }, [data.readiness]);
 
 const jobMatchScore = useMemo(() => {
@@ -345,7 +431,7 @@ const roadmapTotal = getNumber(
             icon={<Target className="h-5 w-5" />}
             label="Career Readiness"
             score={readinessScore}
-            description={scoreLabel(readinessScore)}
+            description={readinessScore === null ? "Add career evidence to calculate this" : scoreLabel(readinessScore)}
           />
 
           <ScoreCard
@@ -479,6 +565,212 @@ const roadmapTotal = getNumber(
           </div>
         </section>
 
+        <section className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-white/30">Resume</p>
+                <h2 className="mt-1 text-lg font-semibold text-white">Career evidence</h2>
+              </div>
+              <a href="/resume" className="text-sm text-cyan-400 hover:underline">Open</a>
+            </div>
+            {data.resume?.resume ? (
+              <div className="mt-4">
+                <p className="break-all text-sm text-white/70">{data.resume.resume.fileName}</p>
+                <p className="mt-2 text-sm text-white/40">{data.resume.resume.score === null ? "Analyze against a job description to calculate compatibility." : `ATS-style compatibility estimate: ${data.resume.resume.score}/100`}</p>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-white/40">No resume yet. Upload a PDF to identify skills and compare job requirements.</p>
+            )}
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <p className="text-xs uppercase tracking-[0.2em] text-white/30">Skill Gaps</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">Target role evidence</h2>
+            {data.skillGaps?.analyses[0] ? (
+              <>
+                <p className="mt-3 text-sm text-white/50">Latest analysis for {data.skillGaps.analyses[0].targetRole}</p>
+                <ul className="mt-2 space-y-1 text-sm text-white/60">
+                  {data.skillGaps.analyses[0].results.skills.filter((skill) => skill.gap === "No direct evidence found").slice(0, 4).map((skill) => <li key={skill.skill}>{skill.skill} <span className="text-xs text-white/35">· {skill.priority} priority</span></li>)}
+                  {data.skillGaps.analyses[0].results.skills.every((skill) => skill.gap !== "No direct evidence found") && <li>No direct evidence gaps in the latest analysis.</li>}
+                </ul>
+              </>
+            ) : <p className="mt-3 text-sm text-white/40">Add a target role and job description to create an evidence-based skill-gap analysis.</p>}
+            <a href="/resume" className="mt-4 inline-block text-sm text-cyan-400 hover:underline">Analyze role fit</a>
+          </div>
+        </section>
+
+        {/* Today's Career Plan */}
+        <section className="rounded-2xl border border-cyan-400/10 bg-cyan-400/[0.03] p-5">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-cyan-400" />
+                <h2 className="text-lg font-semibold text-white">
+                  Today&apos;s Career Plan
+                </h2>
+              </div>
+
+              <p className="mt-1 text-sm text-white/40">
+                A focused plan generated from your current career data.
+              </p>
+            </div>
+
+            {data.dailyPlan?.plan ? (
+              <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-400">
+                {data.dailyPlan.plan.length} tasks
+              </span>
+            ) : null}
+          </div>
+
+          {!data.dailyPlan ? (
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5 text-sm text-white/40">
+              Your daily career plan is currently unavailable.
+            </div>
+          ) : data.dailyPlan.plan.length === 0 ? (
+            <div className="rounded-xl border border-emerald-400/10 bg-emerald-400/[0.04] p-5 text-center">
+              <CheckCircle2 className="mx-auto h-6 w-6 text-emerald-400" />
+
+              <p className="mt-2 text-sm font-medium text-white">
+                No urgent tasks detected.
+              </p>
+
+              <p className="mt-1 text-xs text-white/40">
+                Keep your applications, learning progress, DSA practice,
+                and career actions updated to improve your plan.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {data.dailyPlan.plan.map((item, index) => (
+                <a
+                  key={item.id}
+                  href={item.href}
+                  className="group rounded-xl border border-white/10 bg-white/[0.02] p-4 transition hover:border-cyan-400/20 hover:bg-white/[0.04]"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-400/10 text-xs font-semibold text-cyan-400">
+                      {index + 1}
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-medium text-white group-hover:text-cyan-300">
+                          {item.title}
+                        </h3>
+
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide ${
+                            item.priority === "high"
+                              ? "bg-red-400/10 text-red-300"
+                              : item.priority === "medium"
+                                ? "bg-yellow-400/10 text-yellow-300"
+                                : "bg-white/10 text-white/50"
+                          }`}
+                        >
+                          {item.priority}
+                        </span>
+                      </div>
+
+                      <p className="mt-1 text-xs leading-5 text-white/40">
+                        {item.description}
+                      </p>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Career Activity */}
+        <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-cyan-400" />
+                <h2 className="text-lg font-semibold text-white">
+                  Career Activity
+                </h2>
+              </div>
+              <p className="mt-1 text-sm text-white/40">
+                A snapshot of your applications, learning and DSA progress.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-white/10 bg-black/10 p-4">
+              <p className="text-xs uppercase tracking-wide text-white/35">
+                Applications
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {data.applications?.stats.total ?? "—"}
+              </p>
+              <p className="mt-1 text-xs text-white/40">
+                {data.applications?.stats.active ?? 0} active
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-black/10 p-4">
+              <p className="text-xs uppercase tracking-wide text-white/35">
+                Interviews
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {data.applications?.stats.upcomingInterviews ?? "—"}
+              </p>
+              <p className="mt-1 text-xs text-white/40">
+                upcoming
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-black/10 p-4">
+              <p className="text-xs uppercase tracking-wide text-white/35">
+                Learning
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {data.learning?.progress.filter(
+                  (item) => item.status === "COMPLETED",
+                ).length ?? "—"}
+              </p>
+              <p className="mt-1 text-xs text-white/40">
+                skills completed
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-black/10 p-4">
+              <p className="text-xs uppercase tracking-wide text-white/35">
+                DSA
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {data.dsa?.stats.solved ?? "—"}
+              </p>
+              <p className="mt-1 text-xs text-white/40">
+                solved
+                {data.dsa?.stats.averageAccuracy != null
+                  ? ` · ${data.dsa.stats.averageAccuracy}% accuracy`
+                  : ""}
+              </p>
+            </div>
+          </div>
+
+          {data.dsa?.stats.weakTopics?.length ? (
+            <div className="mt-4 rounded-xl border border-amber-400/10 bg-amber-400/[0.03] p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-amber-300/70">
+                DSA focus
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {data.dsa.stats.weakTopics.slice(0, 3).map((topic) => (
+                  <span
+                    key={topic.topic}
+                    className="rounded-full border border-amber-300/10 bg-amber-300/5 px-3 py-1 text-xs text-amber-200/80"
+                  >
+                    {topic.topic} · {topic.accuracy}%
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
         {/* Priority actions */}
         <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
           <div className="mb-5 flex items-start justify-between gap-4">
@@ -597,11 +889,9 @@ const roadmapTotal = getNumber(
               </p>
 
               <p
-                className={`mt-2 text-2xl font-semibold ${scoreClass(
-                  readinessScore,
-                )}`}
+                className={`mt-2 text-2xl font-semibold ${readinessScore === null ? "text-white/50" : scoreClass(readinessScore)}`}
               >
-                {scoreLabel(readinessScore)}
+                {readinessScore === null ? "Not assessed" : scoreLabel(readinessScore)}
               </p>
 
               <p className="mt-2 text-sm leading-6 text-white/50">
@@ -660,7 +950,7 @@ function ScoreCard({
 }: {
   icon: React.ReactNode;
   label: string;
-  score: number;
+  score: number | null;
   description: string;
 }) {
   return (
@@ -678,15 +968,10 @@ function ScoreCard({
       </p>
 
       <div className="mt-1 flex items-end gap-2">
-        <span
-          className={`text-3xl font-semibold ${scoreClass(score)}`}
-        >
-          {score}
+        <span className={`text-3xl font-semibold ${score === null ? "text-white/50" : scoreClass(score)}`}>
+          {score === null ? "—" : score}
         </span>
-
-        <span className="mb-1 text-xs text-white/30">
-          / 100
-        </span>
+        {score !== null && <span className="mb-1 text-xs text-white/30">/ 100</span>}
       </div>
 
       <p className="mt-1 text-xs text-white/40">
@@ -697,7 +982,7 @@ function ScoreCard({
         <div
           className="h-full rounded-full bg-cyan-400 transition-all duration-500"
           style={{
-            width: `${score}%`,
+            width: `${score ?? 0}%`,
           }}
         />
       </div>

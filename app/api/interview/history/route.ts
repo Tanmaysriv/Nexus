@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { NextResponse } from "next/server";
 import { requireApiAuth, getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -105,5 +106,4 @@ export async function GET() {
     );
   }
 }
-
 

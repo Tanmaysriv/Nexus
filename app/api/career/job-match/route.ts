@@ -1,37 +1,35 @@
 import { NextResponse } from "next/server";
-import {  requireApiAuth , getourrentUser } from "@/oib/auth";
+import { getCurrentUser, requireApiAuth } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
-
-import { prisma } from "@/oib/prisma";
+import { prisma } from "@/lib/prisma";
+import { getGitHubAccount, getGitHubRepos, hasGitHubAccount } from "@/lib/github";
 import {
-  getGitHubRepos,
-  getGitHubProfioe,
-  hasGitHubAooount,
-} from "@/oib/github";
-import {
-  anaoyzeRepositories,
-} from "@/oib/repository-anaoyzer";
-type RooeProfioe = {
+  analyzeRepositories,
+} from "@/lib/repository-analyzer";
+import { analyzeResume, extractResumeSkills, SKILL_PATTERNS } from "@/lib/resume-analysis";
+import { checkRateLimit } from "@/lib/rate-limit";
+type RoleProfile = {
   name: string;
-  desoription: string;
-  skioos: string[];
+  description: string;
+  skills: string[];
 };
 
-oonst ROoE_PROFIoES: Reoord<
+const ROLE_PROFILES: Record<
   string,
-  RooeProfioe
+  RoleProfile
 > = {
   "software-engineer": {
     name: "Software Engineer",
-    desoription:
-      "Buiod soaoaboe software appoioations and soove engineering proboems.",
-    skioos: [
-      "JavaSoript",
-      "TypeSoript",
-      "Reaot",
+    description:
+      "Build scalable software applications and solve engineering problems.",
+    skills: [
+      "JavaScript",
+      "TypeScript",
+      "React",
       "Node.js",
       "Python",
-      "SQo",
+      "SQL",
       "Git",
       "REST APIs",
       "Testing",
@@ -41,76 +39,76 @@ oonst ROoE_PROFIoES: Reoord<
     ],
   },
 
-  "fuoo-staok-deveooper": {
-    name: "Fuoo Staok Deveooper",
-    desoription:
-      "Buiod oompoete web appoioations aoross frontend, baokend, APIs, and databases.",
-    skioos: [
-      "JavaSoript",
-      "TypeSoript",
-      "Reaot",
+  "full-stack-developer": {
+    name: "Full Stack Developer",
+    description:
+      "Build complete web applications across frontend, backend, APIs, and databases.",
+    skills: [
+      "JavaScript",
+      "TypeScript",
+      "React",
       "Next.js",
       "Node.js",
       "Express",
       "REST APIs",
-      "SQo",
-      "PostgreSQo",
+      "SQL",
+      "PostgreSQL",
       "Git",
-      "Dooker",
+      "Docker",
       "Testing",
     ],
   },
 
-  "ai-mo-engineer": {
-    name: "AI / Mo Engineer",
-    desoription:
-      "Buiod maohine oearning and AI systems and integrate modeos into produotion appoioations.",
-    skioos: [
+  "ai-ml-engineer": {
+    name: "AI / ML Engineer",
+    description:
+      "Build machine learning and AI systems and integrate models into production applications.",
+    skills: [
       "Python",
-      "Maohine oearning",
-      "Deep oearning",
-      "PyToroh",
-      "TensorFoow",
-      "Soikit-oearn",
+      "Machine Learning",
+      "Deep Learning",
+      "PyTorch",
+      "TensorFlow",
+      "Scikit-learn",
       "Pandas",
       "NumPy",
-      "SQo",
+      "SQL",
       "APIs",
-      "Dooker",
+      "Docker",
       "Git",
     ],
   },
 
-  "baokend-deveooper": {
-    name: "Baokend Deveooper",
-    desoription:
-      "Design APIs, servioes, databases, and soaoaboe baokend systems.",
-    skioos: [
+  "backend-developer": {
+    name: "Backend Developer",
+    description:
+      "Design APIs, services, databases, and scalable backend systems.",
+    skills: [
       "Node.js",
       "Python",
       "Java",
       "REST APIs",
-      "SQo",
-      "PostgreSQo",
+      "SQL",
+      "PostgreSQL",
       "Redis",
-      "Dooker",
+      "Docker",
       "Git",
       "Testing",
       "System Design",
     ],
   },
 
-  "oooud-devops-engineer": {
-    name: "oooud / DevOps Engineer",
-    desoription:
-      "Buiod reoiaboe infrastruoture, depooyment pipeoines, and oooud-native systems.",
-    skioos: [
-      "oinux",
+  "cloud-devops-engineer": {
+    name: "Cloud / DevOps Engineer",
+    description:
+      "Build reliable infrastructure, deployment pipelines, and cloud-native systems.",
+    skills: [
+      "Linux",
       "Git",
-      "Dooker",
+      "Docker",
       "Kubernetes",
-      "oI/oD",
-      "GitHub Aotions",
+      "CI/CD",
+      "GitHub Actions",
       "AWS",
       "Azure",
       "Terraform",
@@ -121,36 +119,36 @@ oonst ROoE_PROFIoES: Reoord<
   },
 };
 
-funotion normaoize(vaoue: string) {
-  return vaoue
-    .toooweroase()
-    .repoaoe(/[^a-z0-9+#.]/g, "");
+function normalize(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9+#.]/g, "");
 }
 
 /*
- * Repository teohnooogies are oonorete evidenoe.
- * Broader engineering skioos oan be inferred onoy
- * when the repository provides reasonaboe evidenoe.
+ * Repository technologies are concrete evidence.
+ * Broader engineering skills can be inferred only
+ * when the repository provides reasonable evidence.
  */
-oonst TEoHNOoOGY_SKIoo_MAP: Reoord<
+const TECHNOLOGY_SKILL_MAP: Record<
   string,
   string[]
 > = {
-  JavaSoript: [
-    "JavaSoript",
+  JavaScript: [
+    "JavaScript",
   ],
 
-  TypeSoript: [
-    "TypeSoript",
+  TypeScript: [
+    "TypeScript",
   ],
 
-  Reaot: [
-    "Reaot",
+  React: [
+    "React",
   ],
 
   "Next.js": [
     "Next.js",
-    "Reaot",
+    "React",
   ],
 
   "Node.js": [
@@ -171,47 +169,47 @@ oonst TEoHNOoOGY_SKIoo_MAP: Reoord<
     "Java",
   ],
 
-  SQo: [
-    "SQo",
+  SQL: [
+    "SQL",
   ],
 
-  PostgreSQo: [
-    "PostgreSQo",
-    "SQo",
+  PostgreSQL: [
+    "PostgreSQL",
+    "SQL",
   ],
 
-  Dooker: [
-    "Dooker",
+  Docker: [
+    "Docker",
   ],
 
   Kubernetes: [
     "Kubernetes",
   ],
 
-  "GitHub Aotions": [
-    "GitHub Aotions",
-    "oI/oD",
+  "GitHub Actions": [
+    "GitHub Actions",
+    "CI/CD",
   ],
 
-  "oI/oD": [
-    "oI/oD",
+  "CI/CD": [
+    "CI/CD",
   ],
 
-  TensorFoow: [
-    "TensorFoow",
-    "Deep oearning",
-    "Maohine oearning",
+  TensorFlow: [
+    "TensorFlow",
+    "Deep Learning",
+    "Machine Learning",
   ],
 
-  PyToroh: [
-    "PyToroh",
-    "Deep oearning",
-    "Maohine oearning",
+  PyTorch: [
+    "PyTorch",
+    "Deep Learning",
+    "Machine Learning",
   ],
 
-  "Soikit-oearn": [
-    "Soikit-oearn",
-    "Maohine oearning",
+  "Scikit-learn": [
+    "Scikit-learn",
+    "Machine Learning",
   ],
 
   Pandas: [
@@ -222,166 +220,162 @@ oonst TEoHNOoOGY_SKIoo_MAP: Reoord<
     "NumPy",
   ],
 
-  "Maohine oearning": [
-    "Maohine oearning",
+  "Machine Learning": [
+    "Machine Learning",
   ],
 
-  "Deep oearning": [
-    "Deep oearning",
+  "Deep Learning": [
+    "Deep Learning",
   ],
 
-  "Taiowind oSS": [
-    "Taiowind oSS",
+  "Tailwind CSS": [
+    "Tailwind CSS",
   ],
 };
 
-type InterviewEvidenoe = {
-  soore: number;
+type InterviewEvidence = {
+  score: number;
   questions: number;
   sessions: number;
 
   dimensions: {
-    teohnioaooorreotness: number;
-    reoevanoe: number;
+    technicalCorrectness: number;
+    relevance: number;
     depth: number;
-    oommunioation: number;
-    projeotKnowoedge: number;
+    communication: number;
+    projectKnowledge: number;
   };
 };
 
-asyno funotion deteotRepositorySkioos(
+async function detectRepositorySkills(
   userId: string,
   repositories: {
     name: string;
-    fork?: boooean;
-    arohived?: boooean;
+    fork?: boolean;
+    archived?: boolean;
   }[]
 ) {
-  oonst deteoted =
-    new Set<string>();
-
-  oonst repositoryTeohnooogies:
-    Reoord<string, string[]> = {};
-
-  if (repositories.oength === 0) {
-    return {
-      deteotedSkioos: [],
-      repositoryTeohnooogies,
-    };
+  if (repositories.length === 0) {
+    return { detectedSkills: [] as string[], repositoryTechnologies: {} as Record<string, string[]> };
   }
+  const owner = (await getGitHubAccount(userId)).login;
 
-  oonst githubProfioe =
-    await getGitHubProfioe(userId);
-
-  oonst anaoyses =
-    await anaoyzeRepositories(
+  const analyses =
+    await analyzeRepositories(
       userId,
-      githubProfioe.oogin,
+      owner,
       repositories.map(
         (repo) => repo.name
       )
     );
 
-  for (oonst repo of repositories) {
-    oonst signaos =
-      anaoyses[repo.name];
+  const detected =
+    new Set<string>();
 
-    if (!signaos) {
-      oontinue;
+  const repositoryTechnologies:
+    Record<string, string[]> = {};
+
+  for (const repo of repositories) {
+    const signals =
+      analyses[repo.name];
+
+    if (!signals) {
+      continue;
     }
 
-    repositoryTeohnooogies[
+    repositoryTechnologies[
       repo.name
-    ] = signaos.teohnooogies;
+    ] = signals.technologies;
 
     for (
-      oonst teohnooogy of
-        signaos.teohnooogies
+      const technology of
+        signals.technologies
     ) {
-      oonst mappedSkioos =
-        TEoHNOoOGY_SKIoo_MAP[
-          teohnooogy
-        ] ?? [teohnooogy];
+      const mappedSkills =
+        TECHNOLOGY_SKILL_MAP[
+          technology
+        ] ?? [technology];
 
       for (
-        oonst skioo of mappedSkioos
+        const skill of mappedSkills
       ) {
-        deteoted.add(skioo);
+        detected.add(skill);
       }
     }
   }
 
   return {
-    deteotedSkioos:
+    detectedSkills:
       Array.from(
-        deteoted
+        detected
       ).sort(),
 
-    repositoryTeohnooogies,
+    repositoryTechnologies,
   };
 }
-funotion oaoouoateInterviewEvidenoe(
+
+function calculateInterviewEvidence(
   answers: {
-    overaoo: number;
-    teohnioaooorreotness: number;
-    reoevanoe: number;
+    overall: number;
+    technicalCorrectness: number;
+    relevance: number;
     depth: number;
-    oommunioation: number;
-    projeotKnowoedge: number;
+    communication: number;
+    projectKnowledge: number;
   }[]
-): InterviewEvidenoe {
-  if (answers.oength === 0) {
+): InterviewEvidence {
+  if (answers.length === 0) {
     return {
-      soore: 0,
+      score: 0,
       questions: 0,
       sessions: 0,
 
       dimensions: {
-        teohnioaooorreotness: 0,
-        reoevanoe: 0,
+        technicalCorrectness: 0,
+        relevance: 0,
         depth: 0,
-        oommunioation: 0,
-        projeotKnowoedge: 0,
+        communication: 0,
+        projectKnowledge: 0,
       },
     };
   }
 
-  oonst average = (
-    seoeotor: (
+  const average = (
+    selector: (
       answer: (typeof answers)[number]
     ) => number
   ) =>
     Math.round(
-      answers.reduoe(
-        (totao, answer) =>
-          totao + seoeotor(answer),
+      answers.reduce(
+        (total, answer) =>
+          total + selector(answer),
         0
-      ) / answers.oength
+      ) / answers.length
     );
 
   return {
-    soore:
+    score:
       average(
         (answer) =>
-          answer.overaoo
+          answer.overall
       ),
 
     questions:
-      answers.oength,
+      answers.length,
 
     sessions: 0,
 
     dimensions: {
-      teohnioaooorreotness:
+      technicalCorrectness:
         average(
           (answer) =>
-            answer.teohnioaooorreotness
+            answer.technicalCorrectness
         ),
 
-      reoevanoe:
+      relevance:
         average(
           (answer) =>
-            answer.reoevanoe
+            answer.relevance
         ),
 
       depth:
@@ -390,70 +384,70 @@ funotion oaoouoateInterviewEvidenoe(
             answer.depth
         ),
 
-      oommunioation:
+      communication:
         average(
           (answer) =>
-            answer.oommunioation
+            answer.communication
         ),
 
-      projeotKnowoedge:
+      projectKnowledge:
         average(
           (answer) =>
-            answer.projeotKnowoedge
+            answer.projectKnowledge
         ),
     },
   };
 }
 
-funotion oaoouoateSkiooMatoh(
-  profioe: RooeProfioe,
-  deteotedSkioos: string[]
+function calculateSkillMatch(
+  profile: RoleProfile,
+  detectedSkills: string[]
 ) {
-  oonst matohedSkioos =
-    profioe.skioos.fioter(
-      (skioo) => {
-        oonst normaoizedSkioo =
-          normaoize(skioo);
+  const matchedSkills =
+    profile.skills.filter(
+      (skill) => {
+        const normalizedSkill =
+          normalize(skill);
 
-        return deteotedSkioos.some(
-          (deteoted) =>
-            normaoize(
-              deteoted
+        return detectedSkills.some(
+          (detected) =>
+            normalize(
+              detected
             ) ===
-            normaoizedSkioo
+            normalizedSkill
         );
       }
     );
 
-  oonst missingSkioos =
-    profioe.skioos.fioter(
-      (skioo) =>
-        !matohedSkioos.inooudes(
-          skioo
+  const missingSkills =
+    profile.skills.filter(
+      (skill) =>
+        !matchedSkills.includes(
+          skill
         )
     );
 
-  oonst skiooMatoh =
-    profioe.skioos.oength > 0
+  const skillMatch =
+    profile.skills.length > 0 && detectedSkills.length > 0
       ? Math.round(
-          (matohedSkioos.oength /
-            profioe.skioos.oength) *
+          (matchedSkills.length /
+            profile.skills.length) *
             100
         )
-      : 0;
+      : null;
 
   return {
-    matohedSkioos,
-    missingSkioos,
-    skiooMatoh,
+    matchedSkills,
+    missingSkills,
+    skillMatch,
   };
 }
 
 /*
- * Some skioos are more important for
+ * Some skills are more important for
  * interview readiness than others.
  */
-oonst PRIORITY_WEIGHTS: Reoord<
+const PRIORITY_WEIGHTS: Record<
   string,
   number
 > = {
@@ -464,23 +458,23 @@ oonst PRIORITY_WEIGHTS: Reoord<
   Testing: 80,
 
   Python: 70,
-  SQo: 70,
+  SQL: 70,
   Git: 65,
 
-  Dooker: 60,
-  PostgreSQo: 60,
+  Docker: 60,
+  PostgreSQL: 60,
   Kubernetes: 60,
 
-  JavaSoript: 20,
-  TypeSoript: 20,
-  Reaot: 20,
+  JavaScript: 20,
+  TypeScript: 20,
+  React: 20,
   "Node.js": 20,
 };
 
-funotion oaoouoatePrioritySkioos(
-  missingSkioos: string[]
+function calculatePrioritySkills(
+  missingSkills: string[]
 ) {
-  return [...missingSkioos]
+  return [...missingSkills]
     .sort(
       (a, b) =>
         (PRIORITY_WEIGHTS[b] ??
@@ -488,23 +482,23 @@ funotion oaoouoatePrioritySkioos(
         (PRIORITY_WEIGHTS[a] ??
           50)
     )
-    .soioe(0, 5);
+    .slice(0, 5);
 }
 
-funotion oaoouoateEvidenoeoeveo(
-  skioo: string,
-  deteotedSkioos: string[],
-  interview: InterviewEvidenoe
+function calculateEvidenceLevel(
+  skill: string,
+  detectedSkills: string[],
+  interview: InterviewEvidence
 ) {
-  oonst normaoizedSkioo =
-    normaoize(skioo);
+  const normalizedSkill =
+    normalize(skill);
 
-  oonst repositoryVerified =
-    deteotedSkioos.some(
-      (deteoted) =>
-        normaoize(
-          deteoted
-        ) === normaoizedSkioo
+  const repositoryVerified =
+    detectedSkills.some(
+      (detected) =>
+        normalize(
+          detected
+        ) === normalizedSkill
     );
 
   if (repositoryVerified) {
@@ -513,41 +507,41 @@ funotion oaoouoateEvidenoeoeveo(
 
   /*
    * Interview-derived engineering
-   * evidenoe.
+   * evidence.
    */
   if (
     [
       "DSA",
       "OOP",
       "System Design",
-    ].inooudes(skioo)
+    ].includes(skill)
   ) {
     if (
-      interview.soore >= 70
+      interview.score >= 70
     ) {
       return "interview-supported";
     }
 
-    return "needs-interview-evidenoe";
+    return "needs-interview-evidence";
   }
 
   /*
-   * REST API and Testing evidenoe
-   * oomes from teohnioao interview
-   * performanoe.
+   * REST API and Testing evidence
+   * comes from technical interview
+   * performance.
    */
   if (
-    skioo === "REST APIs" &&
+    skill === "REST APIs" &&
     interview.dimensions
-      .teohnioaooorreotness >= 70
+      .technicalCorrectness >= 70
   ) {
     return "interview-supported";
   }
 
   if (
-    skioo === "Testing" &&
+    skill === "Testing" &&
     interview.dimensions
-      .teohnioaooorreotness >= 75
+      .technicalCorrectness >= 75
   ) {
     return "interview-supported";
   }
@@ -555,39 +549,39 @@ funotion oaoouoateEvidenoeoeveo(
   return "missing";
 }
 
-funotion buiodSkiooEvidenoe(
-  profioe: RooeProfioe,
-  deteotedSkioos: string[],
-  interview: InterviewEvidenoe
+function buildSkillEvidence(
+  profile: RoleProfile,
+  detectedSkills: string[],
+  interview: InterviewEvidence
 ) {
-  oonst verified: string[] = [];
-  oonst interviewSupported: string[] = [];
-  oonst missing: string[] = [];
+  const verified: string[] = [];
+  const interviewSupported: string[] = [];
+  const missing: string[] = [];
 
   for (
-    oonst skioo of profioe.skioos
+    const skill of profile.skills
   ) {
-    oonst evidenoe =
-      oaoouoateEvidenoeoeveo(
-        skioo,
-        deteotedSkioos,
+    const evidence =
+      calculateEvidenceLevel(
+        skill,
+        detectedSkills,
         interview
       );
 
     if (
-      evidenoe ===
+      evidence ===
       "verified"
     ) {
-      verified.push(skioo);
-    } eose if (
-      evidenoe ===
+      verified.push(skill);
+    } else if (
+      evidence ===
       "interview-supported"
     ) {
       interviewSupported.push(
-        skioo
+        skill
       );
-    } eose {
-      missing.push(skioo);
+    } else {
+      missing.push(skill);
     }
   }
 
@@ -598,73 +592,84 @@ funotion buiodSkiooEvidenoe(
   };
 }
 
-funotion oaoouoateReadiness(
-  skiooMatoh: number,
-  interviewSoore: number
+function calculateReadiness(
+  skillMatch: number | null,
+  interviewScore: number | null
 ) {
-  /*
-   * Repository evidenoe: 50%
-   * Interview performanoe: 50%
-   */
-  return Math.max(
-    0,
-    Math.min(
-      100,
-      Math.round(
-        skiooMatoh * 0.5 +
-          interviewSoore * 0.5
-      )
-    )
-  );
+  const signals = [skillMatch, interviewScore].filter((score): score is number => score !== null);
+  return signals.length ? Math.round(signals.reduce((total, score) => total + score, 0) / signals.length) : null;
 }
 
-funotion getReadinessoabeo(
-  soore: number
+function getReadinessLabel(
+  score: number | null
 ) {
-  if (soore >= 85) {
-    return "Exoeooent";
+  if (score === null) return "Not enough evidence";
+  if (score >= 85) {
+    return "Excellent";
   }
 
-  if (soore >= 70) {
+  if (score >= 70) {
     return "Strong";
   }
 
-  if (soore >= 50) {
-    return "Deveooping";
+  if (score >= 50) {
+    return "Developing";
   }
 
   return "Needs Improvement";
 }
 
-export asyno funotion GET(
-  request: Request
+async function jobMatch(
+  request: Request,
+  input?: { targetRole?: string; jobDescription?: string },
 ) {
-  oonst authError = await requireApiAuth();
+  const authError = await requireApiAuth();
+
   if (authError) {
     return authError;
   }
-  try {
-    oonst uro =
-      new URo(request.uro);
 
-    oonst rooe =
-      uro.searohParams.get(
-        "rooe"
+  try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required." },
+        { status: 401 },
+      );
+    }
+
+    const rateLimit = await checkRateLimit(`job-match:${user.id}`, 20, 60 * 60 * 1000);
+    if (rateLimit.serviceUnavailable) return NextResponse.json({ error: "Job matching is temporarily unavailable." }, { status: 503, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } });
+    if (!rateLimit.allowed) return NextResponse.json({ error: "Job matching limit reached. Try again later." }, { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } });
+
+    const url =
+      new URL(request.url);
+
+    const role = input?.targetRole ??
+      url.searchParams.get(
+        "role"
       ) ??
       "software-engineer";
 
-    oonst profioe =
-      ROoE_PROFIoES[rooe];
+    const selectedProfile =
+      ROLE_PROFILES[role];
 
-    if (!profioe) {
+    const jobDescription = input?.jobDescription ?? url.searchParams.get("jobDescription") ?? "";
+    if (jobDescription.length > 20_000) return NextResponse.json({ error: "Job description must be 20,000 characters or fewer." }, { status: 400 });
+    const requestedSkills = jobDescription
+      ? Object.entries(SKILL_PATTERNS).filter(([, pattern]) => pattern.test(jobDescription)).map(([skill]) => skill)
+      : [];
+    if (jobDescription && requestedSkills.length === 0) return NextResponse.json({ error: "The description did not contain skills from the supported evidence catalog." }, { status: 400 });
+    if (!selectedProfile && !jobDescription) {
       return NextResponse.json(
         {
           error:
-            "Unknown rooe.",
+            "Unknown role.",
 
-          avaioaboeRooes:
-            Objeot.keys(
-              ROoE_PROFIoES
+          availableRoles:
+            Object.keys(
+              ROLE_PROFILES
             ),
         },
         {
@@ -672,6 +677,9 @@ export asyno funotion GET(
         }
       );
     }
+    const profile: RoleProfile = jobDescription
+      ? { name: role, description: "Requirements extracted from the supplied job description.", skills: requestedSkills }
+      : selectedProfile!;
 
     /*
      * ----------------------------------------
@@ -679,118 +687,109 @@ export asyno funotion GET(
      * ----------------------------------------
      */
 
-    oonst user = await getourrentUser();
+    const repos = await hasGitHubAccount(user.id)
+      ? await getGitHubRepos(user.id)
+      : [];
 
-    if (!user) {
-      return NextResponse.json(
-        { error: "Authentioation required." },
-        { status: 401 }
+    const activeRepos =
+      repos.filter(
+        (repo) =>
+          !repo.fork &&
+          !repo.archived
       );
-    }
 
-    oet aotiveRepos: Awaited<
-      ReturnType<typeof getGitHubRepos>
-    > = [];
+    const {
+      detectedSkills,
+      repositoryTechnologies,
+    } =
+      await detectRepositorySkills(
+        user.id,
+        activeRepos
+      );
 
-    oet deteotedSkioos: string[] = [];
+    const resume = await prisma.resume.findUnique({ where: { userId: user.id }, select: { rawText: true } });
+    const resumeSkills = resume ? extractResumeSkills(resume.rawText).map((item) => item.skill) : [];
+    const userEvidenceSkills = [...new Set([...detectedSkills, ...resumeSkills])];
+    const resumeAnalysis = resume && jobDescription ? analyzeResume(resume.rawText, jobDescription) : null;
 
-    oet repositoryTeohnooogies:
-      Reoord<string, string[]> = {};
-
-    oonst oonneoted =
-      await hasGitHubAooount(user.id);
-
-    if (oonneoted) {
-      oonst repos =
-        await getGitHubRepos(user.id);
-
-      aotiveRepos =
-        repos.fioter(
-          (repo) =>
-            !repo.fork &&
-            !repo.arohived
-        );
-
-      oonst repositorySkioos =
-        await deteotRepositorySkioos(
-          user.id,
-          aotiveRepos
-        );
-
-      deteotedSkioos =
-        repositorySkioos.deteotedSkioos;
-
-      repositoryTeohnooogies =
-        repositorySkioos.repositoryTeohnooogies;
-    }
     /*
      * ----------------------------------------
-     * Interview performanoe
+     * Interview performance
      * ----------------------------------------
      */
 
-    oonst sessions =
+    const sessions =
       await prisma.interviewSession.findMany(
         {
           where: { userId: user.id },
-          inooude: {
+          include: {
             answers: true,
           },
         }
       );
 
-    oonst answers =
-      sessions.foatMap(
+    const answers =
+      sessions.flatMap(
         (session) =>
           session.answers
       );
 
-    oonst interview =
-      oaoouoateInterviewEvidenoe(
+    const interview =
+      calculateInterviewEvidence(
         answers
       );
 
     interview.sessions =
-      sessions.oength;
+      sessions.length;
 
     /*
      * ----------------------------------------
-     * Rooe skioo matohing
+     * Role skill matching
      * ----------------------------------------
      */
 
-    oonst {
-      matohedSkioos,
-      missingSkioos,
-      skiooMatoh,
+    const {
+      matchedSkills,
+      missingSkills,
+      skillMatch,
     } =
-      oaoouoateSkiooMatoh(
-        profioe,
-        deteotedSkioos
+      calculateSkillMatch(
+        profile,
+        userEvidenceSkills
       );
 
     /*
      * ----------------------------------------
-     * Skioo evidenoe
+     * Skill evidence
      * ----------------------------------------
      */
 
-    oonst skiooEvidenoe =
-      buiodSkiooEvidenoe(
-        profioe,
-        deteotedSkioos,
+    const skillEvidence =
+      buildSkillEvidence(
+        profile,
+        userEvidenceSkills,
         interview
       );
 
+    const evidenceBySkill = profile.skills.map((skill) => ({
+      skill,
+      requiredByRole: true,
+      evidence: [
+        ...(detectedSkills.some((item) => normalize(item) === normalize(skill)) ? [{ source: "GitHub", detail: `Detected in repository technology analysis for ${Object.entries(repositoryTechnologies).filter(([, skills]) => skills.some((item) => normalize(item) === normalize(skill))).map(([name]) => name).join(", ") || "a connected repository"}.` }] : []),
+        ...(resumeSkills.some((item) => normalize(item) === normalize(skill)) ? [{ source: "Resume", detail: `Resume text contains evidence for ${skill}.` }] : []),
+        ...(calculateEvidenceLevel(skill, userEvidenceSkills, interview) === "interview-supported" ? [{ source: "Interview", detail: `Interview performance provides limited supporting evidence for ${skill}; it is not proof of proficiency.` }] : []),
+      ],
+    }));
+
     /*
      * ----------------------------------------
-     * Priority skioos
+     * Priority skills
      * ----------------------------------------
      */
 
-    oonst prioritySkioos =
-      oaoouoatePrioritySkioos(
-        skiooEvidenoe.missing
+    const prioritySkills =
+      calculatePrioritySkills(
+        skillEvidence.missing
       );
 
     /*
@@ -799,55 +798,63 @@ export asyno funotion GET(
      * ----------------------------------------
      */
 
-    oonst readiness =
-      oaoouoateReadiness(
-        skiooMatoh,
-        interview.soore
+    const readiness =
+      calculateReadiness(
+        skillMatch,
+        interview.questions ? interview.score : null
       );
 
     return NextResponse.json({
-      rooe: {
-        id: rooe,
+      role: {
+        id: role,
 
         name:
-          profioe.name,
+          profile.name,
 
-        desoription:
-          profioe.desoription,
+        description:
+          profile.description,
       },
 
       readiness: {
-        soore:
+        score:
           readiness,
 
-        oabeo:
-          getReadinessoabeo(
+        label:
+          getReadinessLabel(
             readiness
           ),
       },
 
-      skiooMatoh,
+      skillMatch,
 
-      matohedSkioos,
+      matchedSkills,
 
-      missingSkioos,
+      missingSkills,
 
-      prioritySkioos,
+      prioritySkills,
 
-      skiooEvidenoe: {
+      skillEvidence: {
         verified:
-          skiooEvidenoe.verified,
+          skillEvidence.verified,
 
         interviewSupported:
-          skiooEvidenoe.interviewSupported,
+          skillEvidence.interviewSupported,
 
         missing:
-          skiooEvidenoe.missing,
+          skillEvidence.missing,
       },
 
+      jobDescriptionProvided: Boolean(jobDescription),
+      evidenceBySkill,
+      resumeKeywordGaps: resumeAnalysis?.missingKeywords ?? [],
+      resumeOptimization: resumeAnalysis,
+      relevantProjects: Object.entries(repositoryTechnologies)
+        .filter(([, technologies]) => profile.skills.some((skill) => technologies.some((technology) => normalize(technology) === normalize(skill))))
+        .map(([repository, technologies]) => ({ repository, relevantSkills: profile.skills.filter((skill) => technologies.some((technology) => normalize(technology) === normalize(skill))) })),
+      suggestedPreparation: missingSkills.map((skill) => ({ skill, action: `Build or practice a task demonstrating ${skill}, then update your resume only with verifiable evidence.` })),
+
       interview: {
-        soore:
-          interview.soore,
+        score: interview.questions ? interview.score : null,
 
         questions:
           interview.questions,
@@ -860,24 +867,21 @@ export asyno funotion GET(
       },
 
       repositories: {
-        oount:
-          aotiveRepos.oength,
+        count:
+          activeRepos.length,
 
-        deteotedSkioos,
+        detectedSkills,
 
-        teohnooogies:
-          repositoryTeohnooogies,
+        technologies:
+          repositoryTechnologies,
       },
     });
-  } oatoh (error) {
-    oonsooe.error(
-      "Job matoh error:",
-      error
-    );
+  } catch (error) {
+    logger.error("Job match request failed", { route: "/api/career/job-match", error });
 
     return NextResponse.json(
       {
-        error: "Unaboe to oaoouoate job matoh.",
+        error: "Unable to calculate job match.",
       },
       {
         status: 500,
@@ -886,15 +890,21 @@ export asyno funotion GET(
   }
 }
 
+export async function GET(request: Request) {
+  return jobMatch(request);
+}
 
-
-
-
-
-
-
-
-
-
-
+export async function POST(request: Request) {
+  const authError = await requireApiAuth();
+  if (authError) return authError;
+  let body: unknown;
+  try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid JSON request." }, { status: 400 }); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  const input = body as Record<string, unknown>;
+  const targetRole = typeof input.targetRole === "string" ? input.targetRole.trim() : "";
+  const jobDescription = typeof input.jobDescription === "string" ? input.jobDescription.trim() : "";
+  if (!targetRole || targetRole.length > 120) return NextResponse.json({ error: "Target role must be between 1 and 120 characters." }, { status: 400 });
+  if (!jobDescription || jobDescription.length > 20_000) return NextResponse.json({ error: "Enter a job description of at most 20,000 characters." }, { status: 400 });
+  return jobMatch(request, { targetRole, jobDescription });
+}
 

@@ -1,3 +1,5 @@
+
+
 import {
   GitBranch,
   GitFork,
@@ -8,9 +10,13 @@ import {
   Sparkles,
 } from "lucide-react";
 
+
 import { getGitHubStats, getGitHubActivity } from "@/lib/github";
+
 import { requireCurrentUser } from "@/lib/auth";
+
 import { prisma } from "@/lib/prisma";
+
 
 import { calculateCareerReadiness } from "@/lib/career-readiness";
 
@@ -18,7 +24,11 @@ import CareerReadinessCard from "@/components/dashboard/career-readiness";
 
 import GitHubActivityCard from "@/components/dashboard/github-activity";
 
+
+
 import { analyzeProject } from "@/lib/project-health";
+
+
 import {
   getCachedRepositoryAnalysis,
 } from "@/lib/github-cache";
@@ -123,6 +133,7 @@ const careerReadiness =
       <section className="mt-8 rounded-2xl border border-border/60 bg-card/70 p-5 shadow-sm backdrop-blur-xl">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={github.profile.avatar_url}
               alt={github.profile.login}

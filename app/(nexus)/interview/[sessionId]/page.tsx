@@ -9,6 +9,7 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type Props = {
@@ -17,10 +18,11 @@ type Props = {
   }>;
 };
 
-async function getSession(sessionId: string) {
-  return prisma.interviewSession.findUnique({
+async function getSession(sessionId: string, userId: string) {
+  return prisma.interviewSession.findFirst({
     where: {
       id: sessionId,
+      userId,
     },
     include: {
       answers: {
@@ -128,10 +130,11 @@ function FeedbackList({
 export default async function InterviewSessionPage({
   params,
 }: Props) {
+  const user = await requireCurrentUser();
   const { sessionId } = await params;
 
   const session =
-    await getSession(sessionId);
+    await getSession(sessionId, user.id);
 
   if (!session) {
     return (

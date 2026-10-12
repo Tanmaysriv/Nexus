@@ -1,8 +1,7 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import AccountSettings from "./account-settings";
 
 import {
   Bot,
@@ -12,7 +11,6 @@ import {
   Info,
   ShieldCheck,
   Sparkles,
-  Server,
 } from "lucide-react";
 
 type Integration = {
@@ -203,6 +201,13 @@ export default async function SettingsPage({
         </div>
       </section>
 
+      <AccountSettings
+        name={user.name}
+      email={user.email}
+      githubConnected={githubConfigured}
+      theme={user.theme === "light" ? "light" : "dark"}
+    />
+
       <section className="mt-8">
         <div className="flex items-end justify-between">
           <div>
@@ -263,30 +268,6 @@ export default async function SettingsPage({
         </div>
       </section>
 
-      <section className="mt-8 rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-        <div className="flex items-start gap-3">
-          <Server className="mt-0.5 h-5 w-5 shrink-0 text-white/50" />
-
-          <div>
-            <h2 className="font-semibold text-white">
-              Your NEXUS Account
-            </h2>
-
-            <p className="mt-1 text-sm text-white/40">
-              Signed in as{" "}
-              <span className="text-white/70">
-                {user.email}
-              </span>
-            </p>
-
-            {user.name && (
-              <p className="mt-1 text-sm text-white/40">
-                {user.name}
-              </p>
-            )}
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

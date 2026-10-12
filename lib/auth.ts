@@ -43,10 +43,25 @@ export async function createUserSession(userId: string) {
 
   const cookieStore = await cookies();
 
+  const userPreferences = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { theme: true },
+  });
+  const theme = userPreferences?.theme === "light" ? "light" : "dark";
+
   cookieStore.set({
     name: COOKIE_NAME,
     value: token,
     httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    expires: expiresAt,
+  });
+  cookieStore.set({
+    name: "nexus_theme",
+    value: theme,
+    httpOnly: false,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",

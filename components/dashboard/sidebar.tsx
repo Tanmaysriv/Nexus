@@ -4,6 +4,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BriefcaseBusiness,
+  ClipboardList,
+  ChartNoAxesCombined,
+  Code2,
+  GraduationCap,
+  FileText,
   FolderKanban,
   GitBranch,
   LayoutDashboard,
@@ -33,6 +38,31 @@ const navigation = [
     name: "Career",
     href: "/career",
     icon: BriefcaseBusiness,
+  },
+  {
+    name: "Applications",
+    href: "/applications",
+    icon: ClipboardList,
+  },
+  {
+    name: "Analytics",
+    href: "/analytics",
+    icon: ChartNoAxesCombined,
+  },
+  {
+    name: "Learning",
+    href: "/learning",
+    icon: GraduationCap,
+  },
+  {
+    name: "DSA",
+    href: "/dsa",
+    icon: Code2,
+  },
+  {
+    name: "Resume & Skills",
+    href: "/resume",
+    icon: FileText,
   },
   {
     name: "Interview",
@@ -76,7 +106,7 @@ const router = useRouter();
           <nav className="mt-10 flex flex-1 flex-col gap-1">
             {navigation.map((item) => {
               const Icon = item.icon;
-              const active = pathname === item.href;
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
               return (
                 <Link
@@ -134,7 +164,7 @@ const router = useRouter();
         <div className="flex min-w-max gap-1">
           {navigation.map((item) => {
             const Icon = item.icon;
-            const active = pathname === item.href;
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
             return (
               <Link

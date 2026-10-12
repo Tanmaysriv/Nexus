@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { unstable_cache } from "next/cache";
 import { getGitHubAccount } from "@/lib/github";
 import type {
@@ -1156,12 +1157,4 @@ export async function analyzeRepositories(
     uniqueRepositories
   );
 }
-
-
-
-
-
-
-
-
 

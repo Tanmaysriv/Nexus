@@ -12,6 +12,7 @@ model User {
   email                String                @unique
   name                 String?
   passwordHash         String
+  theme                String                @default("dark")
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   careerActions        CareerAction[]
@@ -20,6 +21,11 @@ model User {
   githubAccount        GitHubAccount?
   githubOAuthStates    GitHubOAuthState[]
   interviewSessions    InterviewSession[]
+  resume               Resume?
+  skillGapAnalyses     SkillGapAnalysis[]
+  applications         Application[]
+  learningProgress     LearningProgress[]
+  dsaEntries           DsaEntry[]
   sessions             Session[]
 
   @@index([createdAt])
@@ -184,4 +190,93 @@ model GitHubOAuthState {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model Resume {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  fileName  String
+  mimeType  String   @default("application/pdf")
+  sizeBytes Int
+  blobUrl   String
+  rawText   String   @db.Text
+  analysis  Json?
+  score     Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt])
+}
+
+model SkillGapAnalysis {
+  id             String   @id @default(cuid())
+  userId         String
+  targetRole     String
+  jobDescription String?  @db.Text
+  requiredSkills String[]
+  currentSkills  String[]
+  results        Json
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Application {
+  id          String   @id @default(cuid())
+  userId      String
+  company     String
+  role        String
+  jobUrl      String?
+  location    String?
+  salary      String?
+  description String?  @db.Text
+  status      String   @default("SAVED")
+  appliedAt   DateTime?
+  interviewAt DateTime?
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, updatedAt])
+  @@index([userId, createdAt])
+}
+
+model LearningProgress {
+  id              String   @id @default(cuid())
+  userId          String
+  skill           String
+  status          String   @default("NOT_STARTED")
+  resourceUrls    String[] @default([])
+  practiceNotes   String?  @db.Text
+  assessmentNotes String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skill])
+  @@index([userId, status, updatedAt])
+}
+
+model DsaEntry {
+  id         String   @id @default(cuid())
+  userId     String
+  topic      String
+  problem    String
+  problemUrl String?
+  difficulty String
+  isSolved   Boolean  @default(false)
+  attempts   Int      @default(0)
+  accuracy   Int      @default(0)
+  notes      String?  @db.Text
+  solvedAt   DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, topic, updatedAt])
+  @@index([userId, isSolved, difficulty])
+  @@index([userId, solvedAt])
 }

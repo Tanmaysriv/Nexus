@@ -10,6 +10,12 @@ const cache = new Map<string, CacheEntry>();
 
 const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
 
+export function clearRepositoryAnalysisCache(userId: string) {
+  for (const key of cache.keys()) {
+    if (key.startsWith(`${userId}:`)) cache.delete(key);
+  }
+}
+
 export async function getCachedRepositoryAnalysis(
   userId: string,
   owner: string,

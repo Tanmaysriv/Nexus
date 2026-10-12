@@ -22,6 +22,7 @@ import { getGitHubAccount, getGitHubProfile } from "@/lib/github";
 import { calculateProjectScore } from "@/lib/project-score";
 import { getCachedRepositoryAnalysis } from "@/lib/github-cache";
 import { calculateCareerImpact } from "@/lib/career-impact";
+import ProjectEvidenceTools from "./project-evidence-tools";
 
 type PageProps = {
   params: Promise<{
@@ -511,6 +512,12 @@ export default async function ProjectPage({
           )}
         </div>
       </section>
+      <ProjectEvidenceTools
+        name={repository.name}
+        description={repository.description}
+        signals={signals}
+        improvements={careerImpact.improvements}
+      />
     </main>
   );
 }

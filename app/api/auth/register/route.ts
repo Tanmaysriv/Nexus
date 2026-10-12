@@ -47,21 +47,24 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json();
+    let body: unknown;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid JSON request." }, { status: 400 }); }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+    const input = body as Record<string, unknown>;
 
     const name =
-      typeof body.name === "string"
-        ? body.name.trim()
+      typeof input.name === "string"
+        ? input.name.trim()
         : "";
 
     const email =
-      typeof body.email === "string"
-        ? body.email.trim().toLowerCase()
+      typeof input.email === "string"
+        ? input.email.trim().toLowerCase()
         : "";
 
     const password =
-      typeof body.password === "string"
-        ? body.password
+      typeof input.password === "string"
+        ? input.password
         : "";
 
     if (!name || name.length > 100) {

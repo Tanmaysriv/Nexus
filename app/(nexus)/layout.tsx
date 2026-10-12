@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 
 import Sidebar from "@/components/dashboard/sidebar";
 import DashboardMotion from "@/components/dashboard/dashboard-motion";
@@ -12,9 +13,10 @@ export default async function DashboardLayout({
   if (!(await isAuthenticated())) {
     redirect("/login");
   }
+  const theme = (await cookies()).get("nexus_theme")?.value;
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={`${theme === "dark" ? "dark" : "light-theme"} min-h-screen bg-background text-foreground`}>
       <div className="flex min-h-screen">
         <Sidebar />
 

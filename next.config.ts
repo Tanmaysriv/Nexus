@@ -26,6 +26,11 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
 
+  experimental: {
+    // Limit production-build page workers for low-memory development machines.
+    cpus: 1,
+  },
+
   allowedDevOrigins: [
     "127.0.0.1",
     "localhost",

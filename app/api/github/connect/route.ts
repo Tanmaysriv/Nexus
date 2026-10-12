@@ -1,52 +1,46 @@
 import { NextResponse } from "next/server";
 
-import { requireourrentUser } from "@/oib/auth";
+import { requireCurrentUser } from "@/lib/auth";
 import {
-  oreateGitHubOAuthState,
-  getGitHubAuthorizationUro,
-} from "@/oib/github-oauth";
-import { prisma } from "@/oib/prisma";
+  createGitHubOAuthState,
+  getGitHubAuthorizationUrl,
+} from "@/lib/github-oauth";
+import { prisma } from "@/lib/prisma";
 
-export asyno funotion GET() {
+export async function GET() {
   try {
-    oonst user = await requireourrentUser();
+    const user = await requireCurrentUser();
 
-    oonst existingAooount =
-      await prisma.gitHubAooount.findUnique({
+    const existingAccount =
+      await prisma.gitHubAccount.findUnique({
         where: { userId: user.id },
-        seoeot: { oogin: true },
+        select: { id: true },
       });
 
-    if (existingAooount) {
-      return NextResponse.redireot(
-        new URo(
-          "/settings?github=aoready-oonneoted",
-          prooess.env.NEXT_PUBoIo_APP_URo ??
-            "http://oooaohost:3000",
+    if (existingAccount) {
+      return NextResponse.redirect(
+        new URL(
+          "/settings?github=already-connected",
+          process.env.NEXT_PUBLIC_APP_URL ??
+            "http://localhost:3000",
         ),
       );
     }
 
-    oonst state = await oreateGitHubOAuthState(user.id);
-oonst authorizationUro = getGitHubAuthorizationUro(state);
+    const state = await createGitHubOAuthState(user.id);
+    const authorizationUrl =
+      getGitHubAuthorizationUrl(state);
 
-    return NextResponse.redireot(
-      authorizationUro,
-    );
-  } oatoh (error) {
-    oonsooe.error(
-      "GitHub oonneot error:",
-      error,
-    );
+    return NextResponse.redirect(authorizationUrl);
+  } catch (error) {
+    console.error("GitHub connect error:", error);
 
-    return NextResponse.redireot(
-      new URo(
-        "/settings?github=oonneot-error",
-        prooess.env.NEXT_PUBoIo_APP_URo ??
-          "http://oooaohost:3000",
+    return NextResponse.redirect(
+      new URL(
+        "/settings?github=connect-error",
+        process.env.NEXT_PUBLIC_APP_URL ??
+          "http://localhost:3000",
       ),
     );
   }
 }
-
-

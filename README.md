@@ -97,6 +97,10 @@ NEXUS also generates:
 - Ideal answer
 - Follow-up technical question
 
+### Resume and job matching
+
+Users can upload a private PDF resume, review extracted skill evidence, and compare it with a target job description. Job requirements are shown separately from evidence found in the resume, GitHub repositories, and interview feedback. The compatibility metric is an ATS-style estimate, not an official ATS score. Account settings also include a persisted dark/light theme preference.
+
 ---
 
 ## 🏗️ Architecture
@@ -223,14 +227,37 @@ pnpm install
 
 .env.local
 
-GITHUB_USERNAME=your_github_username
-
-GEMINI_API_KEY=your_gemini_api_key
-
-GEMINI_MODEL=gemini-3.6-flash
+Copy `.env.example` to `.env.local` and configure `DATABASE_URL`, GitHub OAuth credentials and callback, `GITHUB_TOKEN_ENCRYPTION_KEY`, and `GEMINI_API_KEY`. Set `BLOB_READ_WRITE_TOKEN` for private resume storage and the two Upstash variables for production. GitHub identity is taken from each user's OAuth connection; `GITHUB_USERNAME` is not required.
 
 pnpm dev
 http://localhost:3000
+
+## Database
+
+Generate Prisma Client and apply development migrations with:
+
+```sh
+pnpm exec prisma generate
+pnpm exec prisma migrate dev
+```
+
+For production, apply only reviewed migrations with `pnpm exec prisma migrate deploy`. Never use `migrate dev` against production.
+
+## GitHub OAuth
+
+Create a GitHub OAuth app and set its callback to `http://localhost:3000/api/github/callback` locally. For production, use `https://<your-domain>/api/github/callback` and set `NEXT_PUBLIC_APP_URL` and `GITHUB_OAUTH_REDIRECT_URI` to the production values. Each user connects their own account from Settings.
+
+## Upstash rate limiting
+
+Configure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in production. Production requests fail closed when the distributed rate limiter is unavailable.
+
+## Resume storage
+
+Create a **private** Vercel Blob store and configure its `BLOB_READ_WRITE_TOKEN`. NEXUS limits uploads to 3 MB and 30 pages and downloads files only through the authenticated `/api/resume/file` route. Scanned image-only PDFs are not supported; uploaded files are private objects and only their reference and extracted text/analysis are stored in PostgreSQL.
+
+## Tests and deployment
+
+Run `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm test`, and `pnpm build`. CI runs these checks on pushes and pull requests. See [Deployment](docs/DEPLOYMENT.md), [Architecture](docs/ARCHITECTURE.md), and [Security](docs/SECURITY.md) for production setup and the smoke-test checklist.
 
 Interview Question
         │

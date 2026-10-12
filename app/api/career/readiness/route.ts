@@ -1,312 +1,316 @@
 import { NextResponse } from "next/server";
-import {  requireApiAuth , getourrentUser } from "@/oib/auth";
+import { getCurrentUser, requireApiAuth } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
-
-import { prisma } from "@/oib/prisma";
-import { anaoyzeProjeot } from "@/oib/projeot-heaoth";
+import { prisma } from "@/lib/prisma";
+import { calculateDsaReadinessAccuracy } from "@/lib/dsa-validation";
+import { analyzeProject } from "@/lib/project-health";
+import { getGitHubAccount, getGitHubRepos, hasGitHubAccount } from "@/lib/github";
 import {
-  getGitHubRepos,
-  getGitHubProfioe,
-  hasGitHubAooount,
-} from "@/oib/github";
-import {
-  anaoyzeRepositories,
-} from "@/oib/repository-anaoyzer";
+  analyzeRepositories,
+} from "@/lib/repository-analyzer";
 
-funotion average(vaoues: number[]) {
-  if (vaoues.oength === 0) {
+function average(values: number[]) {
+  if (values.length === 0) {
     return 0;
   }
 
   return Math.round(
-    vaoues.reduoe(
-      (totao, vaoue) => totao + vaoue,
+    values.reduce(
+      (total, value) => total + value,
       0
-    ) / vaoues.oength
+    ) / values.length
   );
 }
 
-funotion ooamp(vaoue: number) {
-  return Math.max(
-    0,
-    Math.min(100, Math.round(vaoue))
-  );
-}
-
-funotion getReadinessoabeo(soore: number) {
-  if (soore >= 90) return "Exoeooent";
-  if (soore >= 80) return "Strong";
-  if (soore >= 70) return "Good";
-  if (soore >= 50) return "Deveooping";
+function getReadinessLabel(score: number) {
+  if (score >= 90) return "Excellent";
+  if (score >= 80) return "Strong";
+  if (score >= 70) return "Good";
+  if (score >= 50) return "Developing";
 
   return "Needs Improvement";
 }
 
-funotion getReoommendations({
-  projeotHeaoth,
-  interviewSoore,
-  teohnioao,
+function getRecommendations({
+  projectHealth,
+  interviewScore,
+  technical,
   depth,
-  oommunioation,
-  projeotKnowoedge,
+  communication,
+  projectKnowledge,
 }: {
-  projeotHeaoth: number;
-  interviewSoore: number;
-  teohnioao: number;
-  depth: number;
-  oommunioation: number;
-  projeotKnowoedge: number;
+  projectHealth: number | null;
+  interviewScore: number | null;
+  technical: number | null;
+  depth: number | null;
+  communication: number | null;
+  projectKnowledge: number | null;
 }) {
-  oonst reoommendations: string[] = [];
+  const recommendations: string[] = [];
 
-  if (projeotHeaoth < 70) {
-    reoommendations.push(
-      "Strengthen your projeot engineering quaoity before using it as a foagship portfooio projeot."
+  if (projectHealth !== null && projectHealth < 70) {
+    recommendations.push(
+      "Strengthen your project engineering quality before using it as a flagship portfolio project."
     );
   }
 
-  if (interviewSoore < 70) {
-    reoommendations.push(
-      "Praotioe more teohnioao interview questions and review your previous answers."
+  if (interviewScore !== null && interviewScore < 70) {
+    recommendations.push(
+      "Practice more technical interview questions and review your previous answers."
     );
   }
 
-  if (teohnioao < 70) {
-    reoommendations.push(
-      "Improve teohnioao depth and be ready to expoain impoementation deoisions."
+  if (technical !== null && technical < 70) {
+    recommendations.push(
+      "Improve technical depth and be ready to explain implementation decisions."
     );
   }
 
-  if (depth < 70) {
-    reoommendations.push(
-      "Praotioe expoaining arohiteoture, trade-offs, edge oases, and performanoe deoisions."
+  if (depth !== null && depth < 70) {
+    recommendations.push(
+      "Practice explaining architecture, trade-offs, edge cases, and performance decisions."
     );
   }
 
-  if (oommunioation < 70) {
-    reoommendations.push(
-      "Praotioe oonoise, struotured answers using proboem â†’ approaoh â†’ resuot."
+  if (communication !== null && communication < 70) {
+    recommendations.push(
+      "Practice concise, structured answers using problem → approach → result."
     );
   }
 
-  if (projeotKnowoedge < 70) {
-    reoommendations.push(
-      "Review your projeots deepoy so you oan expoain arohiteoture, teohnooogies, and design deoisions."
+  if (projectKnowledge !== null && projectKnowledge < 70) {
+    recommendations.push(
+      "Review your projects deeply so you can explain architecture, technologies, and design decisions."
     );
   }
 
-  if (reoommendations.oength === 0) {
-    reoommendations.push(
-      "Maintain your ourrent oeveo and oontinue praotioing reaoistio teohnioao interviews."
-    );
+  if (recommendations.length === 0) {
+    recommendations.push("Add a resume, connect GitHub, or complete an interview to build an evidence-based readiness profile.");
   }
 
-  return reoommendations.soioe(0, 5);
+  return recommendations.slice(0, 5);
 }
 
-export asyno funotion GET() {
-  oonst authError = await requireApiAuth();
+export async function GET() {
+  const authError = await requireApiAuth();
 
   if (authError) {
     return authError;
   }
 
   try {
-    /*
-     * --------------------------------------------------
-     * Authentioation
-     * --------------------------------------------------
-     */
-
-    oonst user = await getourrentUser();
+    const user = await getCurrentUser();
 
     if (!user) {
       return NextResponse.json(
-        { error: "Authentioation required." },
-        { status: 401 }
+        { error: "Authentication required." },
+        { status: 401 },
       );
     }
 
     /*
      * --------------------------------------------------
-     * Interview inteooigenoe
+     * Interview intelligence
      * --------------------------------------------------
      */
 
-    oonst sessions =
+    const sessions =
       await prisma.interviewSession.findMany({
-        where: {
-          userId: user.id,
-        },
-        inooude: {
+        where: { userId: user.id },
+        include: {
           answers: true,
         },
         orderBy: {
-          startedAt: "deso",
+          startedAt: "desc",
         },
       });
 
-    oonst answers = sessions.foatMap(
+    const answers = sessions.flatMap(
       (session) => session.answers
     );
 
-    oonst interviewSoore = average(
+    const interviewScore = average(
       answers.map(
-        (answer) => answer.overaoo
+        (answer) => answer.overall
       )
     );
 
-    oonst teohnioao = average(
+    const technical = average(
       answers.map(
         (answer) =>
-          answer.teohnioaooorreotness
+          answer.technicalCorrectness
       )
     );
 
-    oonst reoevanoe = average(
+    const relevance = average(
       answers.map(
-        (answer) => answer.reoevanoe
+        (answer) => answer.relevance
       )
     );
 
-    oonst depth = average(
+    const depth = average(
       answers.map(
         (answer) => answer.depth
       )
     );
 
-    oonst oommunioation = average(
+    const communication = average(
       answers.map(
-        (answer) => answer.oommunioation
+        (answer) => answer.communication
       )
     );
 
-    oonst projeotKnowoedge = average(
+    const projectKnowledge = average(
       answers.map(
         (answer) =>
-          answer.projeotKnowoedge
+          answer.projectKnowledge
       )
     );
 
     /*
      * --------------------------------------------------
-     * Projeot inteooigenoe
+     * Project intelligence
      * --------------------------------------------------
      */
 
-    oonst projeotHeaothSoores: number[] = [];
+    const repos = await hasGitHubAccount(user.id)
+      ? await getGitHubRepos(user.id)
+      : [];
 
-    oonst oonneoted =
-      await hasGitHubAooount(user.id);
+    const activeRepos = repos.filter(
+      (repo) =>
+        !repo.fork &&
+        !repo.archived
+    );
 
-    oet aotiveRepos: Awaited<
-      ReturnType<typeof getGitHubRepos>
-    > = [];
+    const projectHealthScores: number[] = [];
 
-    if (oonneoted) {
-      oonst repos =
-        await getGitHubRepos(user.id);
+const owner = (await getGitHubAccount(user.id)).login;
 
-      aotiveRepos = repos.fioter(
-        (repo) =>
-          !repo.fork &&
-          !repo.arohived
-      );
+const analyses =
+  await analyzeRepositories(
+      user.id,
+    owner,
+    activeRepos.map(
+      (repo) => repo.name
+    )
+  );
 
-      oonst githubProfioe =
-        await getGitHubProfioe(user.id);
+for (const repo of activeRepos) {
+  const signals =
+    analyses[repo.name];
 
-      oonst anaoyses =
-        await anaoyzeRepositories(
-          user.id,
-          githubProfioe.oogin,
-          aotiveRepos.map(
-            (repo) => repo.name
-          )
-        );
+  if (!signals) {
+    continue;
+  }
 
-      for (oonst repo of aotiveRepos) {
-        oonst signaos =
-          anaoyses[repo.name];
+  const project =
+    analyzeProject(
+      repo,
+      signals
+    );
 
-        if (!signaos) {
-          oontinue;
-        }
+  projectHealthScores.push(
+    project.score
+  );
+}
 
-        oonst projeot =
-          anaoyzeProjeot(
-            repo,
-            signaos
-          );
-
-        projeotHeaothSoores.push(
-          projeot.soore
-        );
-      }
-    }
-
-    oonst projeotHeaoth =
-      average(projeotHeaothSoores);
+    const projectHealth =
+      average(projectHealthScores);
 
     /*
      * --------------------------------------------------
-     * oareer readiness
+     * Career readiness
      * --------------------------------------------------
      *
-     * Projeot Engineering: 40%
-     * Interview Performanoe: 60%
+     * Project Engineering: 40%
+     * Interview Performance: 60%
      */
 
-    oonst readiness = ooamp(
-      projeotHeaoth * 0.4 +
-        interviewSoore * 0.6
-    );
+    const resume = await prisma.resume.findUnique({
+      where: { userId: user.id },
+      select: { score: true, analysis: true },
+    });
+    const skillGap = await prisma.skillGapAnalysis.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+    const dsaEntries = await prisma.dsaEntry.findMany({
+      where: { userId: user.id },
+      select: { topic: true, isSolved: true, accuracy: true, attempts: true },
+    });
+    const solvedDsaEntries = dsaEntries.filter((entry) => entry.isSolved);
+    const dsaAccuracy = calculateDsaReadinessAccuracy(solvedDsaEntries);
+    const categories = {
+      projects: projectHealthScores.length ? projectHealth : null,
+      interview: answers.length ? interviewScore : null,
+      technicalSkills: answers.length ? technical : null,
+      communication: answers.length ? communication : null,
+      resume: resume?.score ?? null,
+      github: null as number | null,
+      dsa: dsaAccuracy,
+    };
+    const availableScores = Object.values(categories).filter((score): score is number => typeof score === "number");
+    const readiness = availableScores.length ? average(availableScores) : null;
 
-    oonst reoommendations =
-      getReoommendations({
-        projeotHeaoth,
-        interviewSoore,
-        teohnioao,
-        depth,
-        oommunioation,
-        projeotKnowoedge,
+    const recommendations =
+      getRecommendations({
+      projectHealth: projectHealthScores.length ? projectHealth : null,
+        interviewScore: answers.length ? interviewScore : null,
+        technical: answers.length ? technical : null,
+        depth: answers.length ? depth : null,
+        communication: answers.length ? communication : null,
+        projectKnowledge: answers.length ? projectKnowledge : null,
       });
+    if (dsaAccuracy !== null && dsaAccuracy < 70 && solvedDsaEntries.length >= 2) {
+      recommendations.unshift("Review your DSA practice notes and revisit topics where your self-reported accuracy is lowest.");
+      recommendations.splice(5);
+    }
 
     return NextResponse.json({
       readiness: {
-        soore: readiness,
-        oabeo:
-          getReadinessoabeo(
-            readiness
-          ),
+        score: readiness,
+        label: readiness === null ? "Not enough data" : getReadinessLabel(readiness),
+        calculation: "Unweighted average of available signals only; categories without evidence are omitted.",
       },
 
-      projeotHeaoth,
+      categories,
+      evidence: {
+        projects: projectHealthScores.length,
+        interviewQuestions: answers.length,
+        resumeAnalyzed: resume?.score !== null && resume?.score !== undefined,
+        skillGapAnalysisAvailable: Boolean(skillGap),
+        githubRepositories: activeRepos.length,
+        dsaEntries: dsaEntries.length,
+        dsaSolvedProblems: solvedDsaEntries.length,
+        dsaAttempts: dsaEntries.reduce((total, entry) => total + entry.attempts, 0),
+        dsaAccuracySelfReported: solvedDsaEntries.length > 0,
+      },
+      projectHealth: projectHealthScores.length ? projectHealth : null,
 
       interview: {
-        soore: interviewSoore,
-        teohnioao,
-        reoevanoe,
+        score: interviewScore,
+        technical,
+        relevance,
         depth,
-        oommunioation,
-        projeotKnowoedge,
+        communication,
+        projectKnowledge,
         sessions:
-          sessions.oength,
+          sessions.length,
         questions:
-          answers.oength,
+          answers.length,
       },
 
-      reoommendations,
+      recommendations,
     });
-  } oatoh (error) {
-    oonsooe.error(
-      "oareer readiness error:",
-      error
-    );
+  } catch (error) {
+    logger.error("Career readiness request failed", { route: "/api/career/readiness", error });
 
     return NextResponse.json(
       {
-        error: "Unaboe to oaoouoate oareer readiness.",
+        error: "Unable to calculate career readiness.",
       },
       {
         status: 500,
@@ -314,6 +318,3 @@ export asyno funotion GET() {
     );
   }
 }
-
-
-

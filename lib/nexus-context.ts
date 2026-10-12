@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import {
   getGitHubStats,
@@ -5,8 +6,20 @@ import {
 } from "@/lib/github";
 import { getCachedRepositoryAnalysis } from "@/lib/github-cache";
 import { analyzeProject } from "@/lib/project-health";
+import { extractResumeSkills } from "@/lib/resume-analysis";
 
 export type NexusContext = {
+  profile: { name: string | null };
+  resume: {
+    exists: boolean;
+    fileName: string | null;
+    skills: string[];
+    compatibilityScore: number | null;
+  };
+  skillGaps: {
+    targetRole: string | null;
+    skills: { skill: string; gap: string; priority: string; recommendedLearning: string }[];
+  };
   github: {
     username: string;
     repositories: number;
@@ -91,7 +104,7 @@ function average(values: number[]) {
 export async function getNexusContext(
   userId: string
 ): Promise<NexusContext> {
-  const [githubResult, sessions, roadmap] =
+  const [githubResult, sessions, roadmap, profile, resume, skillGap] =
     await Promise.all([
       getGitHubStats(userId).catch((error) => {
         logger.warn("GitHub context unavailable", { error });
@@ -125,6 +138,16 @@ export async function getNexusContext(
         orderBy: {
           createdAt: "desc",
         },
+      }),
+
+      prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
+
+      prisma.resume.findUnique({ where: { userId }, select: { fileName: true, rawText: true, score: true } }),
+
+      prisma.skillGapAnalysis.findFirst({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        select: { targetRole: true, results: true },
       }),
     ]);
 
@@ -174,6 +197,8 @@ export async function getNexusContext(
         !repo.fork &&
         !repo.archived
     );
+
+  const gapResult = skillGap?.results as { skills?: { skill: string; gap: string; priority: string; recommendedLearning: string }[] } | undefined;
 
   const projectResults = [];
 
@@ -241,6 +266,22 @@ export async function getNexusContext(
     );
 
   return {
+    profile: { name: profile?.name ?? null },
+    resume: {
+      exists: Boolean(resume),
+      fileName: resume?.fileName ?? null,
+      skills: resume ? extractResumeSkills(resume.rawText).map((entry) => entry.skill) : [],
+      compatibilityScore: resume?.score ?? null,
+    },
+    skillGaps: {
+      targetRole: skillGap?.targetRole ?? null,
+      skills: (gapResult?.skills ?? []).slice(0, 20).map((item) => ({
+        skill: item.skill,
+        gap: item.gap,
+        priority: item.priority,
+        recommendedLearning: item.recommendedLearning,
+      })),
+    },
     github: {
       username:
         github.profile.login,
@@ -385,5 +426,4 @@ export async function getNexusContext(
     },
   };
 }
-
 

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import CareerProgress from "./career-progress";
 import CareerAgent from "@/components/career/career-agent";
+import JobMatchForm from "./job-match-form";
 import ActionCenter from "./action-center";
 import Link from "next/link";
 import {
@@ -19,12 +20,12 @@ import {
 
 type ReadinessResponse = {
   readiness: {
-    score: number;
+    score: number | null;
     label: string;
   };
-  projectHealth: number;
+  projectHealth: number | null;
   interview: {
-    score: number;
+    score: number | null;
     technical: number;
     relevance: number;
     depth: number;
@@ -44,11 +45,11 @@ type JobMatchResponse = {
   };
 
   readiness: {
-    score: number;
+    score: number | null;
     label: string;
   };
 
-  skillMatch: number;
+  skillMatch: number | null;
 
   matchedSkills: string[];
   missingSkills: string[];
@@ -61,7 +62,7 @@ type JobMatchResponse = {
   };
 
   interview: {
-    score: number;
+    score: number | null;
     questions: number;
     sessions: number;
 
@@ -179,12 +180,9 @@ function ScoreBar({
   value,
 }: {
   label: string;
-  value: number;
+  value: number | null;
 }) {
-  const safeValue = Math.max(
-    0,
-    Math.min(100, value)
-  );
+  const safeValue = value === null ? 0 : Math.max(0, Math.min(100, value));
 
   return (
     <div className="space-y-2">
@@ -194,7 +192,7 @@ function ScoreBar({
         </span>
 
         <span className="font-semibold">
-          {safeValue}
+          {value === null ? "Not assessed" : safeValue}
         </span>
       </div>
 
@@ -468,6 +466,8 @@ export default async function CareerPage() {
         </div>
       </section>
 
+      <JobMatchForm />
+
       {/* Main scores */}
 
       <section className="grid gap-5 lg:grid-cols-3">
@@ -479,10 +479,8 @@ export default async function CareerPage() {
               </p>
 
               <h2 className="mt-2 text-4xl font-bold">
-                {readiness.readiness.score}
-                <span className="text-lg font-medium text-muted-foreground">
-                  /100
-                </span>
+                {readiness.readiness.score ?? "—"}
+                {readiness.readiness.score !== null && <span className="text-lg font-medium text-muted-foreground">/100</span>}
               </h2>
             </div>
 
@@ -512,10 +510,8 @@ export default async function CareerPage() {
               </p>
 
               <h2 className="mt-2 text-4xl font-bold">
-                {jobMatch.skillMatch}
-                <span className="text-lg font-medium text-muted-foreground">
-                  %
-                </span>
+                {jobMatch.skillMatch ?? "—"}
+                {jobMatch.skillMatch !== null && <span className="text-lg font-medium text-muted-foreground">%</span>}
               </h2>
             </div>
 
@@ -526,13 +522,13 @@ export default async function CareerPage() {
 
           <div className="mt-5">
             <ScoreBar
-              label="Verified technical skills"
+              label="Skills with resume or GitHub evidence"
               value={jobMatch.skillMatch}
             />
           </div>
 
           <p className="mt-4 text-sm text-muted-foreground">
-            Based on technologies detected across{" "}
+              Based on evidence from your resume and technologies detected across{" "}
             {jobMatch.repositories.count} active
             repositories.
           </p>
@@ -546,10 +542,8 @@ export default async function CareerPage() {
               </p>
 
               <h2 className="mt-2 text-4xl font-bold">
-                {jobMatch.interview.score}
-                <span className="text-lg font-medium text-muted-foreground">
-                  /100
-                </span>
+                {jobMatch.interview.score ?? "—"}
+                {jobMatch.interview.score !== null && <span className="text-lg font-medium text-muted-foreground">/100</span>}
               </h2>
             </div>
 

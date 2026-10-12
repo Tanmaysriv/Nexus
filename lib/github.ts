@@ -1,4 +1,4 @@
-import { unstable_cache } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
 import { decryptGitHubToken } from "@/lib/github-crypto";
@@ -223,6 +223,7 @@ function cachedProfile(
     ["github-profile", userId],
     {
       revalidate: 3600,
+      tags: [`github-user-${userId}`],
     }
   )();
 }
@@ -240,6 +241,7 @@ function cachedRepos(
     ["github-repositories", userId],
     {
       revalidate: 3600,
+      tags: [`github-user-${userId}`],
     }
   )();
 }
@@ -258,8 +260,13 @@ function cachedActivity(
     ["github-activity", userId],
     {
       revalidate: 3600,
+      tags: [`github-user-${userId}`],
     }
   )();
+}
+
+export function invalidateGitHubCache(userId: string) {
+  revalidateTag(`github-user-${userId}`, { expire: 0 });
 }
 
 export async function getGitHubProfile(

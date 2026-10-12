@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { NextResponse } from "next/server";
 
 import { requireApiAuth, getCurrentUser } from "@/lib/auth";
@@ -38,9 +39,4 @@ export async function POST() {
     );
   }
 }
-
-
-
-
-
 

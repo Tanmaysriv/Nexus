@@ -1,151 +1,10 @@
+import { logger } from "@/lib/logger";
 import { NextResponse } from "next/server";
 import { requireApiAuth, getCurrentUser } from "@/lib/auth";
 
 
 import { prisma } from "@/lib/prisma";
-
-const DEFAULT_ROADMAP = [
-  {
-    skill: "DSA",
-    priority: "Critical",
-    reason:
-      "Core requirement for software engineering interviews.",
-    focus: [
-      "Arrays and Strings",
-      "Hashing",
-      "Two Pointers",
-      "Stacks and Queues",
-      "Trees and Graphs",
-      "Dynamic Programming",
-      "Problem solving",
-    ],
-  },
-  {
-    skill: "OOP",
-    priority: "Critical",
-    reason:
-      "Important for writing maintainable and scalable software.",
-    focus: [
-      "Classes and Objects",
-      "Inheritance",
-      "Polymorphism",
-      "Encapsulation",
-      "Abstraction",
-      "SOLID principles",
-    ],
-  },
-  {
-    skill: "System Design",
-    priority: "High",
-    reason:
-      "Builds the ability to reason about scalable systems.",
-    focus: [
-      "Scalability",
-      "Caching",
-      "Load balancing",
-      "Databases",
-      "API design",
-      "Distributed systems",
-    ],
-  },
-  {
-    skill: "Testing",
-    priority: "High",
-    reason:
-      "Strong engineering projects require reliable automated testing.",
-    focus: [
-      "Unit testing",
-      "Integration testing",
-      "API testing",
-      "Mocking",
-      "Test coverage",
-      "CI testing",
-    ],
-  },
-  {
-    skill: "Python",
-    priority: "High",
-    reason:
-      "Adds versatility for backend, automation, data and AI roles.",
-    focus: [
-      "Python fundamentals",
-      "OOP",
-      "Modules",
-      "Virtual environments",
-      "FastAPI",
-      "Automation",
-    ],
-  },
-  {
-    skill: "Git",
-    priority: "Medium",
-    reason:
-      "Essential for professional software development workflows.",
-    focus: [
-      "Branching",
-      "Merging",
-      "Rebasing",
-      "Pull requests",
-      "Conflict resolution",
-      "Git workflows",
-    ],
-  },
-  {
-    skill: "REST APIs",
-    priority: "High",
-    reason:
-      "Important for modern frontend/backend application development.",
-    focus: [
-      "HTTP methods",
-      "Status codes",
-      "Authentication",
-      "Validation",
-      "Pagination",
-      "API security",
-    ],
-  },
-];
-
-async function getOrCreateRoadmap(userId: string, role: string) {
-  let roadmap = await prisma.careerRoadmap.findFirst({
-    where: { userId, role },
-    include: {
-      items: {
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-    },
-  });
-
-  if (roadmap) {
-    return roadmap;
-  }
-
-  roadmap = await prisma.careerRoadmap.create({
-    data: {
-      userId,
-      role,
-      items: {
-        create: DEFAULT_ROADMAP.map((item) => ({
-          skill: item.skill,
-          priority: item.priority,
-          reason: item.reason,
-          focus: item.focus,
-        })),
-      },
-    },
-    include: {
-      items: {
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-    },
-  });
-
-  return roadmap;
-}
+import { getOrCreateCareerRoadmap } from "@/lib/career-roadmap";
 
 export async function GET() {
   const authError = await requireApiAuth();
@@ -162,7 +21,7 @@ export async function GET() {
 
   try {
     const roadmap =
-      await getOrCreateRoadmap(
+      await getOrCreateCareerRoadmap(
         user.id,
         "software-engineer"
       );
@@ -320,8 +179,4 @@ export async function PATCH(
     );
   }
 }
-
-
-
-
 
